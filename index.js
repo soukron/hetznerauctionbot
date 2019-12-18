@@ -10,7 +10,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36'
       },
       live_data_remote = 'https://www.hetzner.com/a_hz_serverboerse/live_data.json',
-      local_filename   = 'cache/live_data.json',
+      local_filename   = 'data/live_data.json',
       telegram_chatid  = process.env.TELEGRAM_CHATID,
       telegram_key     = process.env.TELEGRAM_KEY,
       timeout          = process.env.TIMEOUT || 60;
@@ -36,6 +36,7 @@ const logger = winston.createLogger({
   });
 
 // main loop every ${timeout} seconds
+logger.info('Hetzner Auction Servers notifier started.');
 setInterval(function() {
   logger.info('Checking for new servers');
 
@@ -81,7 +82,7 @@ setInterval(function() {
         // send them individually to Telegram channel
         try {
           for (const server of newServers) {
-            let message = `New server added:\n`;
+            let message = `New server added:\n\n`;
             message += `*ID:* ${server.key}\n`;
             message += `*Name:* ${server.name}\n`;
             message += `*Description:* ${server.freetext}\n`;
