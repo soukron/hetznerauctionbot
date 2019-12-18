@@ -1,16 +1,20 @@
 {
-  "name": "hetznerbiddingbot",
+  "name": "hetznerauctionbot-notifier",
   "version": "1.0.0",
-  "description": "",
+  "description": "This is the code of the part responsible of gather new data from Hetzner and publish it to a Telegram channel using a bot account. Join to http://t.me/hetznerauctionservers Telegram channel to get notified about the latest servers available for ordering.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Sergio G. <soukron@gmbros.net>",
+  "license": "GPLv3",
   "dependencies": {
     "axios": "^0.19.0",
     "telegraf": "^3.34.1",
     "winston": "^3.2.1"
+  },
+  "devDependencies": {
+    "jshint": "^2.11.0-rc1"
   }
 }

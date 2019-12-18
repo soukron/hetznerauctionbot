@@ -1,6 +1,6 @@
 # Files with sensitive data
 gitlab-clone-secret.yaml
-telegram-config-data.yaml
+telegram-config-secret.yaml
 
 # Local server list
 live_data.json
