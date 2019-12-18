@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: List
+metadata: {}
+items:
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: telegram-config-data
+  stringData:
+    token: 'NjMyMDc0MjQ3OkFBRnh4blg3aFdheTVWMUFVZXdVYjFoRVF'
+    chatid: '-1001184163552'
