@@ -86,7 +86,7 @@ setInterval(function() {
             message += `*ID:* ${server.key}\n`;
             message += `*Name:* ${server.name}\n`;
             message += `*Description:* ${server.freetext}\n`;
-            message += `*Price:* ${parseFloat(server.price).toFixed(2)} €/month\n`;
+            message += `*Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
             message += `*Setup Prize:* ${server.setup_prize || '0'} €\n`;
             message += `*Expires:* ${server.next_reduce_hr} left\n\n`;
             message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
