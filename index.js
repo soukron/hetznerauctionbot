@@ -92,7 +92,7 @@ setInterval(function() {
             message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
 
             logger.debug(`Sending message: ${message}`);
-            bot.telegram.sendMessage(telegram_chatid, message, {parse_mode: 'Markdown'});
+            bot.telegram.sendMessage(telegram_chatid, message, {parse_mode: 'Markdown', disable_web_page_preview: true});
           }
         } catch(error) {
           return reject('Error: Cannot send the message to Telegram channel');
