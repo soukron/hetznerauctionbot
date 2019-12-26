@@ -11,14 +11,20 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       },
       live_data_remote = 'https://www.hetzner.com/a_hz_serverboerse/live_data.json',
       local_filename   = 'data/live_data.json',
+      reply_format     = {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      },
       telegram_chatid  = process.env.TELEGRAM_CHATID,
       telegram_key     = process.env.TELEGRAM_KEY,
-      timeout          = process.env.TIMEOUT || 60;
+      timeout          = process.env.TIMEOUT || 60,
+      session_filename = 'data/session.json';
 
 // other variables
 let localServers  = {},
     remoteServers = {},
-    newServers    = {};
+    newServers    = {},
+    sessions      = [];
 
 // initialize some components (bot, logger, etc.)
 const bot = new telegraf(telegram_key)
@@ -35,6 +41,19 @@ const logger = winston.createLogger({
     ]
   });
 
+// compose a message from the server data
+const composeMessage = (server) => {
+  let message = `*ID:* ${server.key}\n`;
+  message += `*Name:* ${server.name}\n`;
+  message += `*Description:* ${server.freetext}\n`;
+  message += `*Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
+  message += `*Setup Prize:* ${server.setup_prize || '0'} €\n`;
+  message += `*Expires:* ${server.next_reduce_hr} left\n\n`;
+  message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
+
+  return message;
+}
+
 // main loop every ${timeout} seconds
 logger.info('Hetzner Auction Servers notifier started.');
 setInterval(function() {
@@ -49,7 +68,7 @@ setInterval(function() {
   // get local list
   .then(response => new Promise((resolve, reject) => {
     try {
-      data = fs.readFileSync(local_filename);
+      let data = fs.readFileSync(local_filename);
       localServers = JSON.parse(data);
     } catch(error) {
       localServers = remoteServers;
@@ -79,23 +98,50 @@ setInterval(function() {
           return reject('Error: Cannot write local server list');
         }
 
-        // send them individually to Telegram channel
+        // read session file for individual notifications
         try {
-          for (const server of newServers) {
-            let message = `New server added:\n\n`;
-            message += `*ID:* ${server.key}\n`;
-            message += `*Name:* ${server.name}\n`;
-            message += `*Description:* ${server.freetext}\n`;
-            message += `*Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
-            message += `*Setup Prize:* ${server.setup_prize || '0'} €\n`;
-            message += `*Expires:* ${server.next_reduce_hr} left\n\n`;
-            message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
-
-            logger.debug(`Sending message: ${message}`);
-            bot.telegram.sendMessage(telegram_chatid, message, {parse_mode: 'Markdown', disable_web_page_preview: true});
-          }
+          sessions = JSON.parse(fs.readFileSync(session_filename))['sessions'];
         } catch(error) {
-          return reject('Error: Cannot send the message to Telegram channel');
+          logger.error(`Error reading ${session_filename}. Skipping individual notifications.`);
+        }
+
+        // loop on every new server
+        for (const server of newServers) {
+          let server_text = composeMessage(server);
+
+          // send them individually to Telegram channel
+          let message = 'New server found:\n' + server_text;
+          logger.debug(`Sending message to ${telegram_chatid}: ${message}`);  
+          try {
+            bot.telegram.sendMessage(telegram_chatid, message, reply_format);
+          } catch(error) {
+            return reject('Error: Cannot send the message to Telegram channel');
+          }
+          
+          // find users with matching filters
+          sessions.forEach(session => {
+            logger.debug(`Checking filter settings for user ${session.id}`);
+            const filters = session.data.filters;
+            if (
+              (filters.maxprice[1] === "Any" || server.price <= filters.maxprice[1]) &&
+              (filters.minhd[1] === "Any" || server.hdd_count >= filters.minhd[1]) &&
+              (filters.minram[1] === "Any" || server.ram >= filters.minram[1]) &&
+              (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
+            ) {
+              if (session.id === '70984416:70984416') {
+                let message = 'New server found based on your search filters:\n' + server_text;
+                logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
+                try {
+                  bot.telegram.sendMessage(session.id, message, reply_format)
+                  .then(({ message_id }) => {
+                    setTimeout(() => ctx.deleteMessage(message_id), server.next_reduce*1000);
+                  });
+                } catch(error) {
+                  return reject(`Error: Cannot send the message to user ${session.id}.`);
+                }      
+              }
+            }
+          });
         }
       } else {
         logger.debug('New data received but no new servers found');

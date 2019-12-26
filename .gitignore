@@ -4,6 +4,7 @@ telegram-config-secret.yaml
 
 # Local server list
 live_data.json
+session.json
 
 # Logs
 logs
