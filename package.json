@@ -1,6 +1,6 @@
 {
   "name": "hetznerauctionbot-notifier",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "This is the code of the part responsible of gather new data from Hetzner and publish it to a Telegram channel using a bot account. Join to http://t.me/hetznerauctionservers Telegram channel to get notified about the latest servers available for ordering.",
   "main": "index.js",
   "scripts": {
