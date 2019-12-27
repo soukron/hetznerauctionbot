@@ -1,0 +1,23 @@
+{
+  "name": "hetznerauctionbot-bot",
+  "version": "1.0.1",
+  "description": "This is the code of the part responsible of interacting with the users using @HetznerAuctionServersBot account.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean-session": "[ ! -d data ] && mkdir data; rm -fr data/session.json",
+    "preseed-session": "[ ! -d data ] && mkdir data; touch data/session.json",
+    "start": "npm run preseed-session && node index.js"
+  },
+  "author": "Sergio G. <soukron@gmbros.net>",
+  "license": "GPLv3",
+  "dependencies": {
+    "telegraf": "^3.34.1",
+    "telegraf-inline-menu": "^4.0.0",
+    "telegraf-session-local": "^1.0.2",
+    "winston": "^3.2.1"
+  },
+  "devDependencies": {
+    "jshint": "^2.11.0-rc1"
+  }
+}
