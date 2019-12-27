@@ -129,7 +129,7 @@ setInterval(function() {
               (filters.minram[1] === "Any" || server.ram >= filters.minram[1]) &&
               (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
             ) {
-              if (session.id === '70984416:70984416') {
+              if (session.id === '70984416:70984416' || session.id === '394357809:394357809') {
                 let message = 'New server found based on your search filters:\n' + server_text;
                 logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
                 try {
