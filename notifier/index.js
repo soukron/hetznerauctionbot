@@ -113,7 +113,8 @@ setInterval(function() {
           // send them individually to Telegram channel
           logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);  
           try {
-            bot.telegram.sendMessage(telegram_chatid, server_text, reply_format);
+            let message = 'Via @HetznerAuctionServersBot:\n'+server_text;
+            bot.telegram.sendMessage(telegram_chatid, message, reply_format);
           } catch(error) {
             return reject('Error: Cannot send the message to Telegram channel');
           }
@@ -128,17 +129,12 @@ setInterval(function() {
               (filters.minram[1] === "Any" || server.ram >= filters.minram[1]) &&
               (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
             ) {
-              if (session.id === '70984416:70984416' || session.id === '394357809:394357809') {
-                logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
-                try {
-                  bot.telegram.sendMessage(session.id, server_text, reply_format)
-                  .then(({ message_id }) => {
-                    setTimeout(() => ctx.deleteMessage(message_id), server.next_reduce*1000);
-                  });
-                } catch(error) {
-                  return reject(`Error: Cannot send the message to user ${session.id}.`);
-                }      
-              }
+              logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
+              try {
+                bot.telegram.sendMessage(session.id, server_text, reply_format);
+              } catch(error) {
+                return reject(`Error: Cannot send the message to user ${session.id}.`);
+              }      
             }
           });
         }
