@@ -102,6 +102,7 @@ items:
                 key: chatid
                 name: telegram-config-secret
           image: image-registry.openshift-image-registry.svc:5000/hetznerbiddingbot-pro/notifier:latest
+          imagePullPolicy: Always
           name: notifier
           resources:
             limits:
@@ -116,6 +117,7 @@ items:
                 key: key
                 name: telegram-config-secret
           image: image-registry.openshift-image-registry.svc:5000/hetznerbiddingbot-pro/bot:latest
+          imagePullPolicy: Always
           name: bot
           resources:
             limits:
@@ -125,6 +127,17 @@ items:
             mountPath: /opt/app-root/src/data
         volumes:
         - name: shared-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: shared-data
     triggers:
     - type: ConfigChange
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: shared-data
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1M
