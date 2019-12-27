@@ -43,13 +43,13 @@ const logger = winston.createLogger({
 
 // compose a message from the server data
 const composeMessage = (server) => {
-  let message = ` - *ID:* ${server.key}\n`;
-  message += ` - *Name:* ${server.name}\n`;
-  message += ` - *Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
-  message += ` - *RAM:* ${server.ram_hr}\n`;
-  message += ` - *Description:* ${server.freetext}\n`;
-  message += ` - *Setup Prize:* ${server.setup_prize || '0'} €\n`;
-  message += ` - *Expires:* ${server.next_reduce_hr} left\n\n`;
+  let message = `📌 *ID:* ${server.key}\n`;
+  message += `🖥️ *CPU:* ${server.cpu}\n`;
+  message += `🧮 *RAM:* ${server.ram_hr}\n`;
+  message += `💽 *HDD:* ${server.hdd_hr}\n`;
+  message += `💵 *Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
+  message += `📋 *Description:* ${server.freetext}\n`;
+  message += `⏲️ *Expires:* ${server.next_reduce_hr} left\n\n`;
   message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
 
   return message;
@@ -111,10 +111,9 @@ setInterval(function() {
           let server_text = composeMessage(server);
 
           // send them individually to Telegram channel
-          let message = 'New server found:\n' + server_text;
-          logger.debug(`Sending message to ${telegram_chatid}: ${message}`);  
+          logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);  
           try {
-            bot.telegram.sendMessage(telegram_chatid, message, reply_format);
+            bot.telegram.sendMessage(telegram_chatid, server_text, reply_format);
           } catch(error) {
             return reject('Error: Cannot send the message to Telegram channel');
           }
@@ -130,10 +129,9 @@ setInterval(function() {
               (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
             ) {
               if (session.id === '70984416:70984416' || session.id === '394357809:394357809') {
-                let message = 'New server found based on your search filters:\n' + server_text;
                 logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
                 try {
-                  bot.telegram.sendMessage(session.id, message, reply_format)
+                  bot.telegram.sendMessage(session.id, server_text, reply_format)
                   .then(({ message_id }) => {
                     setTimeout(() => ctx.deleteMessage(message_id), server.next_reduce*1000);
                   });
