@@ -139,11 +139,9 @@ menu.simpleButton('ℹ️ Help', 'help', {
     message += ' - Use /start to show the main menu at any moment.\n';
     message += ' - Use the Settings menu to set your search preferences and you ';
     message += 'will get notified for new servers matching your criteria.\n';
-    message += ' - Messages from the bot will be deleted automatically after ';
-    message += `some time (or when the server time expires) in order to keep the`;
-    message += ' interface clean\n\n';
-    message += '*IMPORTANT:* This bot is under heavy development. The ';
-    message += 'search and notification features won\'t probably work yet.';
+    message += ' - Messages from the bot may be deleted automatically after ';
+    message += 'some time in order to keep the chat history clean.\n';
+    message += ' - If you need help you can contact [@Soukron](https://t.me/soukron).';
 
     ctx.reply(message, reply_format)
     .then(({ message_id }) => {
