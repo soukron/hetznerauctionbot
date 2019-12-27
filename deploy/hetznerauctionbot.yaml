@@ -34,7 +34,8 @@ items:
         name: notifier:latest
     source:
       git:
-        uri: https://github.com/hetznerauctionbot/notifier.git
+        uri: https://github.com/soukron/hetznerauctionbot.git
+      contextDir: notifier
       type: Git
     strategy:
       sourceStrategy:
@@ -59,7 +60,8 @@ items:
         name: bot:latest
     source:
       git:
-        uri: https://github.com/hetznerauctionbot/bot.git
+        uri: https://github.com/soukron/hetznerauctionbot.git
+      contextDir: bot
       type: Git
     strategy:
       sourceStrategy:
@@ -131,6 +133,22 @@ items:
             claimName: shared-data
     triggers:
     - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - bot
+        from:
+          kind: ImageStreamTag
+          name: bot:latest
+      type: ImageChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - notifier
+        from:
+          kind: ImageStreamTag
+          name: notifier:latest
+      type: ImageChange
 - apiVersion: v1
   kind: PersistentVolumeClaim
   metadata:
