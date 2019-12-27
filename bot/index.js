@@ -95,6 +95,7 @@ filters.forEach(item => {
     setFunc: (ctx, key) => {
       // set the value in the session
       logger.debug(`${ctx.update.callback_query.from.id} (${ctx.update.callback_query.from.username}) sets ${item.name} => ${key}`);
+      ctx.session.username = ctx.update.callback_query.from.username;
       ctx.session.filters[item.name] = [item.title, key];
     },
     isSetFunc: (ctx, key) => {
