@@ -113,7 +113,7 @@ setInterval(function() {
           // send them individually to Telegram channel
           logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);  
           try {
-            let message = 'Via @HetznerAuctionServersBot:\n'+server_text;
+            let message = 'Via @HetznerAuctionServersBot:\n' + server_text;
             bot.telegram.sendMessage(telegram_chatid, message, reply_format);
           } catch(error) {
             return reject('Error: Cannot send the message to Telegram channel');
@@ -122,7 +122,7 @@ setInterval(function() {
           // find users with matching filters
           sessions.forEach(session => {
             logger.debug(`Checking filter settings for user ${session.id}`);
-            const filters = session.data.filters;
+            let filters = session.data.filters;
             if (
               (filters.maxprice[1] === "Any" || server.price <= filters.maxprice[1]) &&
               (filters.minhd[1] === "Any" || server.hdd_count >= filters.minhd[1]) &&

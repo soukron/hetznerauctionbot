@@ -75,8 +75,12 @@ const filtersMenu = new TelegrafInlineMenu('Choose an option to change your sear
 filtersMenu.simpleButton('📄 View current filters', 'configure-filters', {
   doFunc: ctx => {
     let message = 'This is the current filters configuration:\n';
-    for(const [name, filter] of Object.entries(ctx.session.filters)) {
-      message += ` - *${filter[0]}*: ${filter[1]}\n`;
+    try {
+      for (const [name, filter] of Object.entries(ctx.session.filters)) {
+        message += ` - *${filter[0]}*: ${filter[1]}\n`;
+      }
+    } catch(error) {
+        message = 'You don\'t have defined your own filters yet.';
     }
     ctx.reply(message, reply_format)
     .then(({ message_id }) => {
@@ -90,7 +94,7 @@ filters.forEach(item => {
   item.menu.select(`set-${item.name}`, item.values, {
     setFunc: (ctx, key) => {
       // set the value in the session
-      logger.debug(`${ctx.update.callback_query.from.username} sets ${item.name} => ${key}`);
+      logger.debug(`${ctx.update.callback_query.from.id} (${ctx.update.callback_query.from.username}) sets ${item.name} => ${key}`);
       ctx.session.filters[item.name] = [item.title, key];
     },
     isSetFunc: (ctx, key) => {
