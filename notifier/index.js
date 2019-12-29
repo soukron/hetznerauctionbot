@@ -124,9 +124,9 @@ setInterval(function() {
             logger.debug(`Checking filter settings for user ${session.id}`);
             let filters = session.data.filters;
             if (
-              (filters.maxprice[1] === "Any" || server.price <= filters.maxprice[1]) &&
-              (filters.minhd[1] === "Any" || server.hdd_count >= filters.minhd[1]) &&
-              (filters.minram[1] === "Any" || server.ram >= filters.minram[1]) &&
+              (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
+              (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
+              (filters.minram[1] === "Any" || server.ram*1 >= filters.minram[1]*1) &&
               (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
             ) {
               logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
