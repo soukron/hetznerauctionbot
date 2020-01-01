@@ -113,7 +113,7 @@ setInterval(function() {
           // send them individually to Telegram channel
           logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);  
           try {
-            let message = 'Via @HetznerAuctionServersBot:\n' + server_text;
+            let message = 'Via @HetznerAuctionServersBot:\n' + server_text +  'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters.\n';
             bot.telegram.sendMessage(telegram_chatid, message, reply_format);
           } catch(error) {
             return reject('Error: Cannot send the message to Telegram channel');
