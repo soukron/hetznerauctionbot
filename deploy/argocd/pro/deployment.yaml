@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: notifier-bot
+  name: notifier-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notifier-bot
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: notifier-bot
+      name: notifier-bot
+    spec:
+      containers:
+      - env:
+        - name: TELEGRAM_KEY
+          valueFrom:
+            secretKeyRef:
+              key: TOKEN
+              name: telegram-token-secret
+        - name: TELEGRAM_CHATID
+          valueFrom:
+            secretKeyRef:
+              key: CHATID
+              name: telegram-token-secret
+        image: quay.io/soukron/hetznerauctionbot-notifier:latest
+        imagePullPolicy: Always
+        name: notifier
+        resources:
+          limits:
+            memory: 512Mi
+        volumeMounts:
+        - name: shared-data
+          mountPath: /opt/app-root/src/data
+      - env:
+        - name: TELEGRAM_KEY
+          valueFrom:
+            secretKeyRef:
+              key: TOKEN
+              name: telegram-token-secret
+        image: quay.io/soukron/hetznerauctionbot-notifier:latest
+        imagePullPolicy: Always
+        name: bot
+        resources:
+          limits:
+            memory: 512Mi
+        volumeMounts:
+        - name: shared-data
+          mountPath: /opt/app-root/src/data
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: shared-data

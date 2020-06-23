@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hetznerauctionbot-pro
+  namespace: argocd
+spec:
+  destination:
+    namespace: hetznerauctionbot-pro
+    server: 'https://kubernetes.default.svc'
+  source:
+    path: deploy/argocd/pro
+    repoURL: 'https://github.com/soukron/hetznerauctionbot'
+    targetRevision: master
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
