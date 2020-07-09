@@ -44,7 +44,7 @@ spec:
             secretKeyRef:
               key: TOKEN
               name: telegram-token-secret
-        image: quay.io/soukron/hetznerauctionbot-notifier:latest
+        image: quay.io/soukron/hetznerauctionbot-bot:latest
         imagePullPolicy: Always
         name: bot
         resources:
