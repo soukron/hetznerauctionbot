@@ -8,11 +8,13 @@ spec:
     namespace: hetznerauctionbot-pro
     server: 'https://kubernetes.default.svc'
   source:
-    path: deploy/argocd/pro
+    path: cicd/pro
     repoURL: 'https://github.com/soukron/hetznerauctionbot'
     targetRevision: master
   project: default
   syncPolicy:
+    syncOptions:
+    - CreateNamespace=true
     automated:
       prune: true
       selfHeal: true
