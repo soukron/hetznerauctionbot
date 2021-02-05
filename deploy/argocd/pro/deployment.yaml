@@ -29,7 +29,7 @@ spec:
             secretKeyRef:
               key: CHATID
               name: telegram-token-secret
-        image: quay.io/soukron/hetznerauctionbot-notifier:latest
+        image: quay.io/hetznerauctionbot/notifier:latest
         imagePullPolicy: Always
         name: notifier
         resources:
@@ -44,7 +44,7 @@ spec:
             secretKeyRef:
               key: TOKEN
               name: telegram-token-secret
-        image: quay.io/soukron/hetznerauctionbot-bot:latest
+        image: quay.io/hetznerauctionbot/bot:latest
         imagePullPolicy: Always
         name: bot
         resources:
