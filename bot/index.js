@@ -59,14 +59,6 @@ const filters = [
     'menu': new TelegrafInlineMenu('Set the preferred CPU type:'),
     'joinLastRow': false
   },
-/*   {
-    'name': 'ssd',
-    'title': 'SSD',
-    'values': ['Any', 'Yes', 'No'],
-    'menu': new TelegrafInlineMenu('Set the preference for SSD disks:'),
-    'joinLastRow': true
-  }
- */
 ];
 
 // settings submenu definition
@@ -133,6 +125,13 @@ menu.simpleButton('🔍 Search now', 'search-now', {
   },
   joinLastRow: true
 });
+menu.toggle('Notifications', 'notifications', {
+  isSetFunc: ctx => ctx.session.notifications,
+  setFunc: (ctx, newState) => {
+    ctx.session.notifications = newState
+    logger.debug(`${ctx.update.callback_query.from.id} (${ctx.update.callback_query.from.username}) sets notifications => ${newState}`);
+  }
+});
 menu.simpleButton('ℹ️ Help', 'help', {
   doFunc: ctx => {
     let message = 'This is a helper bot for [Hetzner Auction Servers channel]';
@@ -142,6 +141,7 @@ menu.simpleButton('ℹ️ Help', 'help', {
     message += 'will get notified for new servers matching your criteria.\n';
     message += ' - Messages from the bot may be deleted automatically after ';
     message += 'some time in order to keep the chat history clean.\n';
+    message += ' - Disable the notifications at your convenience.\n';
     message += ' - If you need help you can contact [@Soukron](https://t.me/soukron).';
 
     ctx.reply(message, reply_format)
