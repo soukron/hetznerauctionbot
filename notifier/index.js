@@ -58,47 +58,36 @@ const composeMessage = (server) => {
 
 // main loop every ${timeout} seconds
 logger.info('Hetzner Auction Servers notifier started.');
-setInterval(function() {
-  logger.info('Checking for new servers');
+setInterval(async function() {
+  try {
+    logger.info('Checking for new servers');
 
-  // get remote list
-  axios.get(live_data_remote, headers)
-  .then(response => {
+    // get remote list
+    const response = await axios.get(live_data_remote, headers);
     remoteServers = response.data;
-  })
 
-  // get local list
-  .then(response => new Promise((resolve, reject) => {
+    // get local list
     try {
       let data = fs.readFileSync(local_filename);
       localServers = JSON.parse(data);
     } catch(error) {
       localServers = remoteServers;
     }
-    return resolve();
-  }))
 
-  // check if there are new servers and notify them in Telegram channel
-  .then(() => new Promise((resolve, reject) => {
     logger.debug('Remote servers hash: ' + objectHash(remoteServers));
     logger.debug('Local servers hash: ' + objectHash(localServers));
 
     // compare hash of every list
     if (objectHash(remoteServers) !== objectHash(localServers)) {
-
       // get the difference of both lists
       newServers = remoteServers.server.filter(x => !localServers.server.find(y => y.key === x.key));
 
       // do more job if there are new servers
       if (newServers.length > 0) {
-        logger.info(`Found ${ newServers.length } servers`);
+        logger.info(`Found ${newServers.length} servers`);
 
         // save the new list for future executions
-        try {
-          fs.writeFileSync(local_filename, JSON.stringify(remoteServers));
-        } catch(error) {
-          return reject('Error: Cannot write local server list');
-        }
+        fs.writeFileSync(local_filename, JSON.stringify(remoteServers));
 
         // read session file for individual notifications
         try {
@@ -113,36 +102,28 @@ setInterval(function() {
 
           // send them individually to Telegram channel
           logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);
-          try {
-            let message = 'Via @HetznerAuctionServersBot:\n' + server_text +  'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters.\n';
-            bot.telegram.sendMessage(telegram_chatid, message, reply_format);
-          } catch(error) {
-            return reject('Error: Cannot send the message to Telegram channel');
-          }
+          let message = 'Via @HetznerAuctionServersBot:\n' + server_text +  'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters.\n';
+          await bot.telegram.sendMessage(telegram_chatid, message, reply_format);
 
           // find users with matching filters
-          sessions.forEach(session => {
+          for (const session of sessions) {
             if (session.data.notifications == false) {
               logger.debug(`Skipping filter settings for user ${session.id}`);
+              continue;
             }
-            else {
-              logger.debug(`Checking filter settings for user ${session.id}`);
-              let filters = session.data.filters;
-              if (
-                (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
-                (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
-                (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
-                (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
-              ) {
-                logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
-                try {
-                  bot.telegram.sendMessage(session.id, server_text, reply_format);
-                } catch(error) {
-                  return reject(`Error: Cannot send the message to user ${session.id}.`);
-                }
-              }
+            
+            logger.debug(`Checking filter settings for user ${session.id}`);
+            let filters = session.data.filters;
+            if (
+              (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
+              (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
+              (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
+              (filters.cputype[1] === "Any" || server.cpu.indexOf(filters.cputype[1]) > -1)
+            ) {
+              logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
+              await bot.telegram.sendMessage(session.id, server_text, reply_format);
             }
-          });
+          }
         }
       } else {
         logger.debug('New data received but no new servers found');
@@ -150,15 +131,11 @@ setInterval(function() {
     } else {
       logger.debug('No new data in remote server list');
     }
-    return resolve();
-  }))
-
-  // catch any other possible error in the promises
-  .catch((error) => {
+  } catch (error) {
     if (error.isAxiosError) {
       logger.error('Error: Cannot fetch remote server list');
     } else {
-      logger.error(error);
+      logger.error('Error occurred: ', error);
     }
-  });
+  }
 }, timeout * 1000);
