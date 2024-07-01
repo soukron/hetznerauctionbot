@@ -108,11 +108,11 @@ setInterval(async function() {
           // find users with matching filters
           for (const session of sessions) {
             if (session.data.notifications == false) {
-              logger.debug(`Skipping filter settings for user ${session.id}`);
+              logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
               continue;
             }
             
-            logger.debug(`Checking filter settings for user ${session.id}`);
+            logger.debug(`Checking filter settings for user ${session.id} (${session.data.username})`);
             let filters = session.data.filters;
             if (
               (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
@@ -120,7 +120,7 @@ setInterval(async function() {
               (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
               (filters.cputype[1] === "Any" || server.cpu.indexOf(filters.cputype[1]) > -1)
             ) {
-              logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
+              logger.debug(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
               await bot.telegram.sendMessage(session.id, server_text, reply_format);
             }
           }
@@ -131,11 +131,31 @@ setInterval(async function() {
     } else {
       logger.debug('No new data in remote server list');
     }
-  } catch (error) {
+  } 
+  catch (error) {
     if (error.isAxiosError) {
-      logger.error('Error: Cannot fetch remote server list');
+      logger.error('Axios Error ocurred: ');
+      logger.error(`- Message: ${error.message}`);
+      logger.error(`- Status: ${error.response ? error.response.status : 'N/A'}`);
+      logger.error(`- Status Text: ${error.response ? error.response.statusText : 'N/A'}`);
+      logger.error(`- Config URL: ${error.config.url}`);
+      logger.error(`- Request Data: ${JSON.stringify(error.config.data)}`);
+      if (error.response) {
+        logger.error(`- Response Data: ${JSON.stringify(error.response.data)}`);
+      }
     } else {
-      logger.error('Error occurred: ', error);
+      logger.error(`Error occurred: ${error.code}`);
+      logger.error(`- Message: ${error.message}`);
+      logger.error(`- On: ${JSON.stringify(error.on)}`);
     }
+    // logger.error('Full error object properties:');
+    // Object.getOwnPropertyNames(error).forEach(key => {
+    //   try {
+    //     const value = error[key];
+    //     logger.error(`- ${key}: ${JSON.stringify(value)}`);
+    //   } catch (jsonError) {
+    //     logger.error(`- ${key}: [Unserializable]`);
+    //   }
+    // });
   }
 }, timeout * 1000);
