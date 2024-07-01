@@ -48,7 +48,7 @@ const composeMessage = (server) => {
   let message = `📌 *ID:* ${server.key}\n`;
   message += `🖥️ *CPU:* ${server.cpu}\n`;
   message += `🧮 *RAM:* ${server.ram_size}G\n`;
-  message += `💽 *HDD:* ${server.hdd_hr}\n`;
+  message += `💽 *HDD:* ${server.hdd_hr.join(', ')}\n`;
   message += `💵 *Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
   const description = Array.isArray(server.description) ? server.description.join(', ') : 'No description available';
   message += `📋 *Description:* ${description}\n`;
