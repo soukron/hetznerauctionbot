@@ -1,9 +1,10 @@
 // include requirements
-const fs         = require('fs'),
-      axios      = require('axios'),
-      telegraf   = require('telegraf');
-      winston    = require('winston');
-      objectHash = require('object-hash');
+const fs               = require('fs'),
+      axios            = require('axios'),
+      telegraf         = require('telegraf');
+      winston          = require('winston');
+      objectHash       = require('object-hash');
+      humanizeDuration = require("humanize-duration");
 
 // configuration variables with default values
 const loglevel         = process.env.LOGLEVEL || 'info',
@@ -49,8 +50,16 @@ const composeMessage = (server) => {
   message += `🧮 *RAM:* ${server.ram_size}G\n`;
   message += `💽 *HDD:* ${server.hdd_hr}\n`;
   message += `💵 *Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
-  message += `📋 *Description:* ${server.freetext}\n`;
-  message += `⏲️ *Expires:* ${server.next_reduce_hr} left\n\n`;
+  const description = Array.isArray(server.description) ? server.description.join(', ') : 'No description available';
+  message += `📋 *Description:* ${description}\n`;
+  const timeRemaining = humanizeDuration(server.next_reduce * 1000, { 
+    units: ['h', 'm', 's'],
+    round: true,
+    delimiter: ' ',
+    spacer: '',
+    language: 'en'
+  });
+  message += `⏲️ *Expires in:* ${timeRemaining}\n\n`;
   message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
 
   return message;

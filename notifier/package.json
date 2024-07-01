@@ -15,7 +15,8 @@
     "axios": "^0.21.1",
     "telegraf": "^3.34.1",
     "winston": "^3.2.1",
-    "object-hash": "^3.0.0"
+    "object-hash": "^3.0.0",
+    "humanize-duration": "^3.32.1"
   },
   "devDependencies": {
     "jshint": "^2.11.0-rc1"
