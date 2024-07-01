@@ -1,15 +1,16 @@
 // include requirements
-const fs       = require('fs'),
-      axios    = require('axios'),
-      telegraf = require('telegraf');
-      winston  = require('winston');
+const fs         = require('fs'),
+      axios      = require('axios'),
+      telegraf   = require('telegraf');
+      winston    = require('winston');
+      objectHash = require('object-hash');
 
 // configuration variables with default values
 const loglevel         = process.env.LOGLEVEL || 'info',
       headers          = {
        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36'
       },
-      live_data_remote = 'https://www.hetzner.com/a_hz_serverboerse/live_data.json',
+      live_data_remote = 'https://www.hetzner.com/_resources/app/jsondata/live_data_sb.json',
       local_filename   = 'data/live_data.json',
       reply_format     = {
         parse_mode: 'Markdown',
@@ -45,7 +46,7 @@ const logger = winston.createLogger({
 const composeMessage = (server) => {
   let message = `📌 *ID:* ${server.key}\n`;
   message += `🖥️ *CPU:* ${server.cpu}\n`;
-  message += `🧮 *RAM:* ${server.ram_hr}\n`;
+  message += `🧮 *RAM:* ${server.ram_size}G\n`;
   message += `💽 *HDD:* ${server.hdd_hr}\n`;
   message += `💵 *Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n`;
   message += `📋 *Description:* ${server.freetext}\n`;
@@ -79,11 +80,11 @@ setInterval(function() {
 
   // check if there are new servers and notify them in Telegram channel
   .then(() => new Promise((resolve, reject) => {
-    logger.debug(`Remote servers hash: ${remoteServers.hash}`);
-    logger.debug(`Local servers hash: ${localServers.hash}`);
+    logger.debug('Remote servers hash: ' + objectHash(remoteServers));
+    logger.debug('Local servers hash: ' + objectHash(localServers));
 
     // compare hash of every list
-    if (remoteServers.hash !== localServers.hash) {
+    if (objectHash(remoteServers) !== objectHash(localServers)) {
 
       // get the difference of both lists
       newServers = remoteServers.server.filter(x => !localServers.server.find(y => y.key === x.key));
@@ -111,14 +112,14 @@ setInterval(function() {
           let server_text = composeMessage(server);
 
           // send them individually to Telegram channel
-          logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);  
+          logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);
           try {
             let message = 'Via @HetznerAuctionServersBot:\n' + server_text +  'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters.\n';
             bot.telegram.sendMessage(telegram_chatid, message, reply_format);
           } catch(error) {
             return reject('Error: Cannot send the message to Telegram channel');
           }
-          
+
           // find users with matching filters
           sessions.forEach(session => {
             if (session.data.notifications == false) {
@@ -130,7 +131,7 @@ setInterval(function() {
               if (
                 (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
                 (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
-                (filters.minram[1] === "Any" || server.ram*1 >= filters.minram[1]*1) &&
+                (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
                 (filters.cputype[1] === "Any" || server.cpu.indexOf(filter.cputype[1]) > -1)
               ) {
                 logger.debug(`Server ${server.key} matches filters for user ${session.id}`);
@@ -138,7 +139,7 @@ setInterval(function() {
                   bot.telegram.sendMessage(session.id, server_text, reply_format);
                 } catch(error) {
                   return reject(`Error: Cannot send the message to user ${session.id}.`);
-                }      
+                }
               }
             }
           });
