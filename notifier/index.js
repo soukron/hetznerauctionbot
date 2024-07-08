@@ -105,19 +105,10 @@ setInterval(async function() {
         } catch(error) {
           logger.error(`Error reading ${session_filename}. Skipping individual notifications.`);
         }
-        sessionsErrors = [];
-
-        // loop on every new server
-        for (const server of newServers) {
-          let server_text = composeMessage(server);
-
-          // send them individually to Telegram channel
-          logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);
-          let message = 'Via @HetznerAuctionServersBot:\n' + server_text +  'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters.\n';
-          await bot.telegram.sendMessage(telegram_chatid, message, reply_format);
-
-          // find users with matching filters
-          for (const session of sessions) {
+        
+        // helper function to send notifications to users
+        const sendNotifications = async (users, server, server_text) => {
+          for (const session of users) {
             try {
               if (session.data.notifications == false) {
                 logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
@@ -139,16 +130,33 @@ setInterval(async function() {
               logger.error(`Error occurred for user ${session.id}: ${sessionError.code ? sessionError.code : 'N/A'}`);
               logger.error(`- Message: ${sessionError.message}`);
               logger.error(`- On: ${JSON.stringify(sessionError.on)}`);
-              sessionsErrors.push(session.id);
             }
           }
         }
 
-        // Remove sessions with errors
-        if (sessionsErrors.size > 0) {
-          logger.info(`Removing ${sessionsErrors.size} sessions due to errors.`);
-          sessions = sessions.filter(session => !sessionsErrors.has(session.id));
-          saveJSONToFile(session_filename, { sessions });
+        // loop on every new server
+        for (const server of newServers) {
+          let server_text = composeMessage(server);
+
+          // send them individually to Telegram channel
+          logger.debug(`Sending message to ${telegram_chatid}: ${server_text}`);
+          let message = 'Via @HetznerAuctionServersBot:\n' + server_text + 'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters and/or unlock premium features.\n';
+          await bot.telegram.sendMessage(telegram_chatid, message, reply_format);
+
+          // find premium users
+          let premiumUsers = sessions.filter(session => session.data.premium === 1);
+          let regularUsers = sessions.filter(session => session.data.premium !== 1);
+
+          // send notifications to premium users
+          logger.info(`Notifying ${premiumUsers.length} premium users.`);
+          await sendNotifications(premiumUsers, server, server_text);
+
+          // delay for 30 minutes before notifying regular users
+          await new Promise(resolve => setTimeout(resolve, 30 * 60 * 1000));
+
+          // send notifications to regular users
+          logger.info(`Notifying ${regularUsers.length} regular users.`);
+          await sendNotifications(regularUsers, server, server_text);
         }
       } else {
         logger.debug('New data received but no new servers found');
