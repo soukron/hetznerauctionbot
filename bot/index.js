@@ -18,6 +18,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       max_daily_searches = process.env.MAX_SEARCHES || 5,
       max_results        = process.env.MAX_RESULTS || 3,
       abs_max_results    = process.env.ABS_MAX_RESULTS || 10;
+      reply_timeout      = process.env.REPLY_TIMEOUT || 5,
 
 // initialize some components (bot, winston, etc.)
 const bot = new Telegraf(telegram_key);
@@ -160,8 +161,6 @@ menu.simpleButton('🔍 Search now', 'search-now', {
         if (!isPremium) {
           messages.push(`You can do ${max_daily_searches - ctx.session.searchCount} more searches today.`);
         }
-        replyWithAutoDelete(ctx, messages.join('\n'), 2);
-      }
     }
   },
   joinLastRow: true
@@ -169,6 +168,7 @@ menu.simpleButton('🔍 Search now', 'search-now', {
 menu.toggle('Notifications', 'notifications', {
   isSetFunc: ctx => ctx.session.notifications,
   setFunc: (ctx, newState) => {
+    ctx.session.notifications = newState;
     ctx.session.notifications = newState;
     logger.debug(`${ctx.update.callback_query.from.id} (${ctx.update.callback_query.from.username}) sets notifications => ${newState}`);
   }
@@ -193,13 +193,13 @@ menu.simpleButton('ℹ️ Help', 'help', {
 //   doFunc: ctx => {
 //     let nonPremiumMessage = 'Consider donating to the developer to enjoy some nice to have features like:\n';
 //     nonPremiumMessage += ' - receive unlimited daily notifications.\n';
-//     nonPremiumMessage += ' - receive the notifications 15 minutes before non-premium users.\n';
+//     nonPremiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
 //     nonPremiumMessage += ' - perform unlimited searches per day based on your filters.\n';
 //     nonPremiumMessage += ' - increase the number of results in searches.\n\n';
 
 //     let premiumMessage = 'Thanks for supporting the developer. As a *premium member* you can:\n';
 //     premiumMessage += ' - receive unlimited daily notifications.\n';
-//     premiumMessage += ' - receive the notifications 15 minutes before non-premium users.\n';
+//     premiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
 //     premiumMessage += ' - perform unlimited searches per day based on your filters.\n';
 //     premiumMessage += ' - increase the number of results in searches.\n\n';
 //     premiumMessage += 'Thank you!'
