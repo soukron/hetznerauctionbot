@@ -1,10 +1,9 @@
 // include requirements
-const Telegraf           = require('telegraf'),
-      TelegrafInlineMenu = require('telegraf-inline-menu'),
-      TelegrafSession    = require('telegraf-session-local'),
-      winston            = require('winston');
-
-const { findServersForUser } = require('./notifier');
+const { findServersForUser } = require('./notifier'),
+      Telegraf               = require('telegraf'),
+      TelegrafInlineMenu     = require('telegraf-inline-menu'),
+      TelegrafSession        = require('telegraf-session-local'),
+      winston                = require('winston');
 
 // configuration variables with default values
 const loglevel         = process.env.LOGLEVEL || 'info',
@@ -12,10 +11,13 @@ const loglevel         = process.env.LOGLEVEL || 'info',
         parse_mode: 'Markdown',
         disable_web_page_preview: true
       },
-      reply_timeout    = process.env.REPLY_TIMEOUT || 5,
-      session_filename = 'data/session.json',
-      local_filename   = 'data/live_data.json',
-      telegram_key     = process.env.TELEGRAM_KEY;
+      reply_timeout      = process.env.REPLY_TIMEOUT || 5,
+      session_filename   = 'data/session.json',
+      local_filename     = 'data/live_data.json',
+      telegram_key       = process.env.TELEGRAM_KEY,
+      max_daily_searches = process.env.MAX_SEARCHES || 5,
+      max_results        = process.env.MAX_RESULTS || 3,
+      abs_max_results    = process.env.ABS_MAX_RESULTS || 10;
 
 // initialize some components (bot, winston, etc.)
 const bot = new Telegraf(telegram_key);
@@ -135,19 +137,29 @@ menu.submenu('🔧 Filters', 'filters', filtersMenu);
 menu.simpleButton('🔍 Search now', 'search-now', {
   doFunc: ctx => {
     initializeOrResetSearchCount(ctx); // Ensure search count is up-to-date
-    if (ctx.session.searchCount >= 5) {
-      replyWithAutoDelete(ctx, 'You have reached the daily limit of 5 searches. Please try again tomorrow.', 2);
+
+    // Check if user is premium
+    const isPremium = ctx.session.premium === 1;
+
+    if (!isPremium && ctx.session.searchCount >= max_daily_searches) {
+      replyWithAutoDelete(ctx, `You have reached the daily limit of ${max_daily_searches} searches. Please try again tomorrow or unlock Premium features.`, 2);
     } else {
-      ctx.session.searchCount++;
-      const servers = findServersForUser(ctx.update.callback_query.from.id, local_filename, session_filename);
-      if (servers.length == 0) {
-        replyWithAutoDelete(ctx, 'There are no active servers that matches your criteria.', 2);
+      if (!isPremium) {
+        ctx.session.searchCount++;
       }
-      else {
-        let messages = [];  
-        messages.push(`Here are the most recent 3 servers (out of ${servers.length}):`);
-        servers.slice(0, 3).forEach(server => messages.push(server));
-        messages.push(`You can do ${5 - ctx.session.searchCount} more searches today.`);
+
+      const servers = findServersForUser(ctx.update.callback_query.from.id, local_filename, session_filename);
+      if (servers.length === 0) {
+        replyWithAutoDelete(ctx, 'There are no active servers that match your criteria.', 2);
+      } else {
+        let messages = [];
+        let max_slice = (isPremium? abs_max_results:max_results);
+
+        messages.push(`Here are the most recent ${max_slice} servers (out of ${servers.length}):`);
+        servers.slice(0, max_slice).forEach(server => messages.push(server));
+        if (!isPremium) {
+          messages.push(`You can do ${max_daily_searches - ctx.session.searchCount} more searches today.`);
+        }
         replyWithAutoDelete(ctx, messages.join('\n'), 2);
       }
     }
@@ -157,7 +169,7 @@ menu.simpleButton('🔍 Search now', 'search-now', {
 menu.toggle('Notifications', 'notifications', {
   isSetFunc: ctx => ctx.session.notifications,
   setFunc: (ctx, newState) => {
-    ctx.session.notifications = newState
+    ctx.session.notifications = newState;
     logger.debug(`${ctx.update.callback_query.from.id} (${ctx.update.callback_query.from.username}) sets notifications => ${newState}`);
   }
 });
@@ -171,11 +183,35 @@ menu.simpleButton('ℹ️ Help', 'help', {
     message += ' - Messages from the bot may be deleted automatically after ';
     message += 'some time in order to keep the chat history clean.\n';
     message += ' - Disable the notifications at your convenience.\n';
+    message += ' - Premium features available.\n';
     message += ' - If you need help you can contact [@Soukron](https://t.me/soukron).';
 
     replyWithAutoDelete(ctx, message, 2);
   }
 });
+// menu.simpleButton('🏅 Premium features', 'premium', {
+//   doFunc: ctx => {
+//     let nonPremiumMessage = 'Consider donating to the developer to enjoy some nice to have features like:\n';
+//     nonPremiumMessage += ' - receive unlimited daily notifications.\n';
+//     nonPremiumMessage += ' - receive the notifications 15 minutes before non-premium users.\n';
+//     nonPremiumMessage += ' - perform unlimited searches per day based on your filters.\n';
+//     nonPremiumMessage += ' - increase the number of results in searches.\n\n';
+
+//     let premiumMessage = 'Thanks for supporting the developer. As a *premium member* you can:\n';
+//     premiumMessage += ' - receive unlimited daily notifications.\n';
+//     premiumMessage += ' - receive the notifications 15 minutes before non-premium users.\n';
+//     premiumMessage += ' - perform unlimited searches per day based on your filters.\n';
+//     premiumMessage += ' - increase the number of results in searches.\n\n';
+//     premiumMessage += 'Thank you!'
+
+//     if (ctx.session.premium === 1) {
+//       replyWithAutoDelete(ctx, premiumMessage, 2);
+//     }
+//     else {
+//       replyWithAutoDelete(ctx, nonPremiumMessage, 2);
+//     }
+//   }
+// });
 
 // set bot options (session, menu, callbacks and catch errors)
 bot.use((new TelegrafSession({ database: session_filename })).middleware());
