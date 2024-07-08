@@ -15,7 +15,8 @@
     "telegraf": "^3.34.1",
     "telegraf-inline-menu": "^4.0.0",
     "telegraf-session-local": "^1.0.2",
-    "winston": "^3.2.1"
+    "winston": "^3.2.1",
+    "humanize-duration": "^3.32.1"
   },
   "devDependencies": {
     "jshint": "^2.11.0-rc1"

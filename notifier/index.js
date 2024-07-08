@@ -23,10 +23,11 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       session_filename = 'data/session.json';
 
 // other variables
-let localServers  = {},
-    remoteServers = {},
-    newServers    = {},
-    sessions      = [];
+let localServers   = {},
+    remoteServers  = {},
+    newServers     = {},
+    sessions       = [].
+    sessionsErrors = [];
 
 // initialize some components (bot, logger, etc.)
 const bot = new telegraf(telegram_key)
@@ -104,6 +105,7 @@ setInterval(async function() {
         } catch(error) {
           logger.error(`Error reading ${session_filename}. Skipping individual notifications.`);
         }
+        sessionsErrors = [];
 
         // loop on every new server
         for (const server of newServers) {
@@ -116,23 +118,37 @@ setInterval(async function() {
 
           // find users with matching filters
           for (const session of sessions) {
-            if (session.data.notifications == false) {
-              logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
-              continue;
-            }
-            
-            logger.debug(`Checking filter settings for user ${session.id} (${session.data.username})`);
-            let filters = session.data.filters;
-            if (
-              (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
-              (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
-              (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
-              (filters.cputype[1] === "Any" || server.cpu.indexOf(filters.cputype[1]) > -1)
-            ) {
-              logger.debug(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
-              await bot.telegram.sendMessage(session.id, server_text, reply_format);
+            try {
+              if (session.data.notifications == false) {
+                logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
+                continue;
+              }
+
+              logger.debug(`Checking filter settings for user ${session.id} (${session.data.username})`);
+              let filters = session.data.filters;
+              if (
+                (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
+                (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
+                (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
+                (filters.cputype[1] === "Any" || server.cpu.indexOf(filters.cputype[1]) > -1)
+              ) {
+                logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
+                await bot.telegram.sendMessage(session.id, server_text, reply_format);
+              }
+            } catch (sessionError) {
+              logger.error(`Error occurred for user ${session.id}: ${sessionError.code ? sessionError.code : 'N/A'}`);
+              logger.error(`- Message: ${sessionError.message}`);
+              logger.error(`- On: ${JSON.stringify(sessionError.on)}`);
+              sessionsErrors.push(session.id);
             }
           }
+        }
+
+        // Remove sessions with errors
+        if (sessionsErrors.size > 0) {
+          logger.info(`Removing ${sessionsErrors.size} sessions due to errors.`);
+          sessions = sessions.filter(session => !sessionsErrors.has(session.id));
+          saveJSONToFile(session_filename, { sessions });
         }
       } else {
         logger.debug('New data received but no new servers found');
@@ -153,18 +169,15 @@ setInterval(async function() {
         logger.error(`- Response Data: ${JSON.stringify(error.response.data)}`);
       }
     } else {
-      logger.error(`Error occurred: ${error.code}`);
-      logger.error(`- Message: ${error.message}`);
-      logger.error(`- On: ${JSON.stringify(error.on)}`);
+      logger.error('Full error object properties:');
+      Object.getOwnPropertyNames(error).forEach(key => {
+        try {
+          const value = error[key];
+          logger.error(`- ${key}: ${JSON.stringify(value)}`);
+        } catch (jsonError) {
+          logger.error(`- ${key}: [Unserializable]`);
+        }
+      });
     }
-    // logger.error('Full error object properties:');
-    // Object.getOwnPropertyNames(error).forEach(key => {
-    //   try {
-    //     const value = error[key];
-    //     logger.error(`- ${key}: ${JSON.stringify(value)}`);
-    //   } catch (jsonError) {
-    //     logger.error(`- ${key}: [Unserializable]`);
-    //   }
-    // });
   }
 }, timeout * 1000);

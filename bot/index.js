@@ -4,6 +4,8 @@ const Telegraf           = require('telegraf'),
       TelegrafSession    = require('telegraf-session-local'),
       winston            = require('winston');
 
+const { findServersForUser } = require('./notifier');
+
 // configuration variables with default values
 const loglevel         = process.env.LOGLEVEL || 'info',
       reply_format     = {
@@ -12,6 +14,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       },
       reply_timeout    = process.env.REPLY_TIMEOUT || 5,
       session_filename = 'data/session.json',
+      local_filename   = 'data/live_data.json',
       telegram_key     = process.env.TELEGRAM_KEY;
 
 // initialize some components (bot, winston, etc.)
@@ -118,10 +121,13 @@ menu.setCommand('start');
 menu.submenu('🔧 Filters', 'filters', filtersMenu);
 menu.simpleButton('🔍 Search now', 'search-now', {
   doFunc: ctx => {
-    ctx.reply('This feature is under development. Not results so far.')
-    .then(({ message_id }) => {
-      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*1000);
+    const messages = findServersForUser(ctx.update.callback_query.from.id, local_filename, session_filename);
+    ctx.reply('Here are most recent 3 servers:', reply_format).then(({ message_id }) => {
+      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*2*1000);
     });
+    messages.forEach(message => ctx.reply(message, reply_format).then(({ message_id }) => {
+      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*2*1000);
+    }));
   },
   joinLastRow: true
 });
