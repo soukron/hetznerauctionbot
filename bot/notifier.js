@@ -28,7 +28,7 @@ const composeMessage = (server) => {
     `💽 *HDD:* ${server.hdd_hr.join(', ')}\n` +
     `💵 *Price:* ${parseFloat(server.price).toFixed(2)} €/month (excl. VAT)\n` +
     `📋 *Description:* ${description}\n` +
-    `⏲️ *Expires in:* ${timeRemaining}\n\n`
+    `⏲️ *Expires in:* ${timeRemaining}\n`
 }
 
 // Function to check if server matches user filters
@@ -53,7 +53,7 @@ const findServersForUser = (userId, localFilename, sessionFilename) => {
   }
  
   const matchingServers = localServers.server.filter(server => serverMatchesFilters(server, userSession.data.filters));
-  const messages = matchingServers.slice(0, 3).map(server => composeMessage(server));
+  const messages = matchingServers.map(server => composeMessage(server));
 
   return messages;
 }

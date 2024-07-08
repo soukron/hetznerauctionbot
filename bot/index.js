@@ -32,6 +32,22 @@ const logger = winston.createLogger({
   ]
 });
 
+// function to initialize or reset search count
+const initializeOrResetSearchCount = (ctx) => {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!ctx.session.searchDate || (ctx.session.searchDate && ctx.session.searchDate !== today)) {
+    ctx.session.searchDate = today;
+    ctx.session.searchCount = 0;
+  }
+}
+
+// function to reply with auto-delete
+const replyWithAutoDelete = (ctx, message, timeoutMultiplier = 1) => {
+  ctx.reply(message, reply_format).then(({ message_id }) => {
+    setTimeout(() => ctx.deleteMessage(message_id), reply_timeout * timeoutMultiplier * 1000);
+  });
+}
+
 // search filters to create submenus programatically
 const filters = [
   {
@@ -75,12 +91,9 @@ filtersMenu.simpleButton('📄 View current filters', 'configure-filters', {
         message += ` - *${filter[0]}*: ${filter[1]}\n`;
       }
     } catch(error) {
-        message = 'You don\'t have defined your own filters yet.';
+      message = 'You don\'t have defined your own filters yet.';
     }
-    ctx.reply(message, reply_format)
-    .then(({ message_id }) => {
-      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*1000);
-    });
+    replyWithAutoDelete(ctx, message);
   }
 });
 // settings -> submenus for each filter option
@@ -121,13 +134,23 @@ menu.setCommand('start');
 menu.submenu('🔧 Filters', 'filters', filtersMenu);
 menu.simpleButton('🔍 Search now', 'search-now', {
   doFunc: ctx => {
-    const messages = findServersForUser(ctx.update.callback_query.from.id, local_filename, session_filename);
-    ctx.reply('Here are most recent 3 servers:', reply_format).then(({ message_id }) => {
-      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*2*1000);
-    });
-    messages.forEach(message => ctx.reply(message, reply_format).then(({ message_id }) => {
-      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*2*1000);
-    }));
+    initializeOrResetSearchCount(ctx); // Ensure search count is up-to-date
+    if (ctx.session.searchCount >= 5) {
+      replyWithAutoDelete(ctx, 'You have reached the daily limit of 5 searches. Please try again tomorrow.', 2);
+    } else {
+      ctx.session.searchCount++;
+      const servers = findServersForUser(ctx.update.callback_query.from.id, local_filename, session_filename);
+      if (servers.length == 0) {
+        replyWithAutoDelete(ctx, 'There are no active servers that matches your criteria.', 2);
+      }
+      else {
+        let messages = [];  
+        messages.push(`Here are the most recent 3 servers (out of ${servers.length}):`);
+        servers.slice(0, 3).forEach(server => messages.push(server));
+        messages.push(`You can do ${5 - ctx.session.searchCount} more searches today.`);
+        replyWithAutoDelete(ctx, messages.join('\n'), 2);
+      }
+    }
   },
   joinLastRow: true
 });
@@ -150,10 +173,7 @@ menu.simpleButton('ℹ️ Help', 'help', {
     message += ' - Disable the notifications at your convenience.\n';
     message += ' - If you need help you can contact [@Soukron](https://t.me/soukron).';
 
-    ctx.reply(message, reply_format)
-    .then(({ message_id }) => {
-      setTimeout(() => ctx.deleteMessage(message_id), reply_timeout*2*1000);
-    });
+    replyWithAutoDelete(ctx, message, 2);
   }
 });
 
