@@ -117,6 +117,7 @@ filters.forEach(item => {
       catch (error) { 
         // initialize filters in session if error
         if (typeof ctx.session.filters === 'undefined') {
+          ctx.session.notifications = true;
           ctx.session.filters = {};
           filters.forEach(filter => {
             ctx.session.filters[filter.name] = [filter.title, filter.values[0]];
@@ -159,8 +160,10 @@ menu.simpleButton('🔍 Search now', 'search-now', {
         messages.push(`Here are the most recent ${max_slice} servers (out of ${servers.length}):`);
         servers.slice(0, max_slice).forEach(server => messages.push(server));
         if (!isPremium) {
-          messages.push(`You can do ${max_daily_searches - ctx.session.searchCount} more searches today.`);
+          messages.push(`You can do *${max_daily_searches - ctx.session.searchCount} more searches* today.`);
         }
+        replyWithAutoDelete(ctx, messages.join('\n'), 5);
+      }
     }
   },
   joinLastRow: true
