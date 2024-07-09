@@ -167,7 +167,7 @@ menu.simpleButton('🔍 Search now', 'search-now', {
   },
   joinLastRow: true
 });
-menu.toggle('Notifications', 'notifications', {
+menu.toggle(ctx => ctx.session.notifications? 'Disable notifications': 'Enable notifications', 'notifications', {
   isSetFunc: ctx => ctx.session.notifications,
   setFunc: (ctx, newState) => {
     ctx.session.notifications = newState;
@@ -191,29 +191,29 @@ menu.simpleButton('ℹ️ Help', 'help', {
     replyWithAutoDelete(ctx, message, 2);
   }
 });
-// menu.simpleButton('🏅 Premium features', 'premium', {
-//   doFunc: ctx => {
-//     let nonPremiumMessage = 'Consider donating to the developer to enjoy some nice to have features like:\n';
-//     nonPremiumMessage += ' - receive unlimited daily notifications.\n';
-//     nonPremiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
-//     nonPremiumMessage += ' - perform unlimited searches per day based on your filters.\n';
-//     nonPremiumMessage += ' - increase the number of results in searches.\n\n';
+menu.simpleButton(ctx => ctx.session.premium == 0? '🏅 Enable premium features':'🏅  Premium features enabled', 'premium', {
+  doFunc: ctx => {
+    let nonPremiumMessage = 'Consider supporting the developer and get in return some nice features in like:\n';
+    nonPremiumMessage += ' - receive unlimited daily notifications.\n';
+    nonPremiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
+    nonPremiumMessage += ' - perform unlimited searches per day based on your filters.\n';
+    nonPremiumMessage += ' - increase the number of results in searches.\n\n';
 
-//     let premiumMessage = 'Thanks for supporting the developer. As a *premium member* you can:\n';
-//     premiumMessage += ' - receive unlimited daily notifications.\n';
-//     premiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
-//     premiumMessage += ' - perform unlimited searches per day based on your filters.\n';
-//     premiumMessage += ' - increase the number of results in searches.\n\n';
-//     premiumMessage += 'Thank you!'
+    let premiumMessage = 'Thanks for supporting the developer. As a *premium member* you can:\n';
+    premiumMessage += ' - receive unlimited daily notifications.\n';
+    premiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
+    premiumMessage += ' - perform unlimited searches per day based on your filters.\n';
+    premiumMessage += ' - increase the number of results in searches.\n\n';
+    premiumMessage += 'Thank you!'
 
-//     if (ctx.session.premium === 1) {
-//       replyWithAutoDelete(ctx, premiumMessage, 2);
-//     }
-//     else {
-//       replyWithAutoDelete(ctx, nonPremiumMessage, 2);
-//     }
-//   }
-// });
+    if (ctx.session.premium === 1) {
+      replyWithAutoDelete(ctx, premiumMessage, 3);
+    }
+    else {
+      replyWithAutoDelete(ctx, nonPremiumMessage, 3);
+    }  
+  }
+});
 
 // set bot options (session, menu, callbacks and catch errors)
 bot.use((new TelegrafSession({ database: session_filename })).middleware());
