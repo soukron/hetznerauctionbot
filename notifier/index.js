@@ -1,9 +1,9 @@
 // include requirements
 const fs               = require('fs'),
       axios            = require('axios'),
-      telegraf         = require('telegraf');
-      winston          = require('winston');
-      objectHash       = require('object-hash');
+      telegraf         = require('telegraf'),
+      winston          = require('winston'),
+      objectHash       = require('object-hash'),
       humanizeDuration = require("humanize-duration");
 
 // configuration variables with default values
@@ -20,29 +20,30 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       telegram_chatid  = process.env.TELEGRAM_CHATID,
       telegram_key     = process.env.TELEGRAM_KEY,
       timeout          = process.env.TIMEOUT || 60,
-      session_filename = 'data/session.json';
+      session_filename = 'data/session.json',
+      premium_delay    = process.env.PREMIUM_DELAY || 30,
+      max_daily_notifications = process.env.MAX_DAILY_NOTIFICATIONS || 5;
 
 // other variables
 let localServers   = {},
     remoteServers  = {},
     newServers     = {},
-    sessions       = [].
-    sessionsErrors = [];
+    sessions       = [];
 
 // initialize some components (bot, logger, etc.)
-const bot = new telegraf(telegram_key)
+const bot = new telegraf(telegram_key);
 const logger = winston.createLogger({
-    transports: [
-        new winston.transports.Console({
-              level: loglevel,
-              handleExceptions: true,
-              format: winston.format.combine(
-                winston.format.timestamp({format: 'YYYY-MM-DD HH:mm:ss'}),
-                winston.format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`+(info.splat!==undefined? `${info.splat}.` : '.'))
-              )
-            })
-    ]
-  });
+  transports: [
+    new winston.transports.Console({
+      level: loglevel,
+      handleExceptions: true,
+      format: winston.format.combine(
+        winston.format.timestamp({format: 'YYYY-MM-DD HH:mm:ss'}),
+        winston.format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`+(info.splat!==undefined? `${info.splat}.` : '.'))
+      )
+    })
+  ]
+});
 
 // compose a message from the server data
 const composeMessage = (server) => {
@@ -66,8 +67,24 @@ const composeMessage = (server) => {
   return message;
 }
 
+// function to save sessions to file
+const saveJSONToFile = (filename, jsonObject) => {
+  logger.info("Saving json");
+  fs.writeFileSync(filename, JSON.stringify(jsonObject, null, 2));
+}
+
+// function to reset notification counters if the date has changed
+const resetNotificationCounterIfNeeded = (session) => {
+  const currentDate = new Date().toISOString().split('T')[0];
+  if (!session.data.notificationsDate || (session.data.notificationsDate && session.data.notificationsDate !== currentDate)) {
+    session.data.notificationsDate = currentDate;
+    session.data.notificationsCount = 0;
+  }
+}
+
 // main loop every ${timeout} seconds
 logger.info('Hetzner Auction Servers notifier started.');
+
 setInterval(async function() {
   try {
     logger.info('Checking for new servers');
@@ -105,9 +122,9 @@ setInterval(async function() {
         } catch(error) {
           logger.error(`Error reading ${session_filename}. Skipping individual notifications.`);
         }
-        
+
         // helper function to send notifications to users
-        const sendNotifications = async (users, server, server_text) => {
+        const sendNotifications = async (users, server, server_text, sessions) => {
           for (const session of users) {
             try {
               if (session.data.notifications == false) {
@@ -123,6 +140,16 @@ setInterval(async function() {
                 (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
                 (filters.cputype[1] === "Any" || server.cpu.indexOf(filters.cputype[1]) > -1)
               ) {
+                resetNotificationCounterIfNeeded(session);
+                if (session.data.premium === 0 && session.data.notificationsCount >= max_daily_notifications) {
+                  logger.info(`User ${session.id} (${session.data.username}) has reached the daily notification limit.`);
+                  continue;
+                }
+                else if (session.data.premium === 0) {
+                  session.data.notificationsCount += 1;
+                  saveJSONToFile(session_filename, { sessions });
+                }
+
                 logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
                 await bot.telegram.sendMessage(session.id, server_text, reply_format);
               }
@@ -149,14 +176,14 @@ setInterval(async function() {
 
           // send notifications to premium users
           logger.info(`Notifying ${premiumUsers.length} premium users.`);
-          await sendNotifications(premiumUsers, server, server_text);
+          await sendNotifications(premiumUsers, server, server_text, sessions);
 
           // delay for 30 minutes before notifying regular users
-          await new Promise(resolve => setTimeout(resolve, 30 * 60 * 1000));
+          await new Promise(resolve => setTimeout(resolve, premium_delay * 60 * 1000));
 
           // send notifications to regular users
           logger.info(`Notifying ${regularUsers.length} regular users.`);
-          await sendNotifications(regularUsers, server, server_text);
+          await sendNotifications(regularUsers, server, server_text, sessions);
         }
       } else {
         logger.debug('New data received but no new servers found');
@@ -167,7 +194,7 @@ setInterval(async function() {
   } 
   catch (error) {
     if (error.isAxiosError) {
-      logger.error('Axios Error ocurred: ');
+      logger.error('Axios error occurred: ');
       logger.error(`- Message: ${error.message}`);
       logger.error(`- Status: ${error.response ? error.response.status : 'N/A'}`);
       logger.error(`- Status Text: ${error.response ? error.response.statusText : 'N/A'}`);
