@@ -18,7 +18,6 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       max_daily_searches = process.env.MAX_SEARCHES || 5,
       max_results        = process.env.MAX_RESULTS || 3,
       abs_max_results    = process.env.ABS_MAX_RESULTS || 10;
-      reply_timeout      = process.env.REPLY_TIMEOUT || 5,
 
 // initialize some components (bot, winston, etc.)
 const bot = new Telegraf(telegram_key);
