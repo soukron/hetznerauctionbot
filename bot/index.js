@@ -191,13 +191,13 @@ menu.simpleButton('ℹ️ Help', 'help', {
     replyWithAutoDelete(ctx, message, 2);
   }
 });
-menu.simpleButton(ctx => ctx.session.premium == 0? '🏅 Enable premium features':'🏅  Premium features enabled', 'premium', {
+menu.simpleButton(ctx => ctx.session.premium && ctx.session.premium === 1? '🏅 Premium features enabled':'🏅  Enable premium features', 'premium', {
   doFunc: ctx => {
-    let nonPremiumMessage = 'Consider supporting the developer and get in return some nice features in like:\n';
-    nonPremiumMessage += ' - receive unlimited daily notifications.\n';
-    nonPremiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
-    nonPremiumMessage += ' - perform unlimited searches per day based on your filters.\n';
-    nonPremiumMessage += ' - increase the number of results in searches.\n\n';
+    let nonPremiumMessage = 'Consider supporting the developer and get in return some nice features like:\n';
+    nonPremiumMessage += ' - receiving unlimited daily notifications.\n';
+    nonPremiumMessage += ' - receiving the notifications before non-premium users.\n';
+    nonPremiumMessage += ' - performing unlimited searches per day based on your filters.\n';
+    nonPremiumMessage += ' - increased number of results in searches.\n\n';
 
     let premiumMessage = 'Thanks for supporting the developer. As a *premium member* you can:\n';
     premiumMessage += ' - receive unlimited daily notifications.\n';
