@@ -11,7 +11,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
         parse_mode: 'Markdown',
         disable_web_page_preview: true
       },
-      reply_timeout      = process.env.REPLY_TIMEOUT || 5,
+      reply_timeout      = process.env.REPLY_TIMEOUT || 10,
       session_filename   = 'data/session.json',
       local_filename     = 'data/live_data.json',
       telegram_key       = process.env.TELEGRAM_KEY,
@@ -44,9 +44,9 @@ const initializeOrResetSearchCount = (ctx) => {
 }
 
 // function to reply with auto-delete
-const replyWithAutoDelete = (ctx, message, timeoutMultiplier = 1) => {
+const replyWithAutoDelete = (ctx, message, timeout = reply_timeout) => {
   ctx.reply(message, reply_format).then(({ message_id }) => {
-    setTimeout(() => ctx.deleteMessage(message_id), reply_timeout * timeoutMultiplier * 1000);
+    setTimeout(() => ctx.deleteMessage(message_id), timeout * 1000);
   });
 }
 
@@ -95,7 +95,7 @@ filtersMenu.simpleButton('📄 View current filters', 'configure-filters', {
     } catch(error) {
       message = 'You don\'t have defined your own filters yet.';
     }
-    replyWithAutoDelete(ctx, message);
+    replyWithAutoDelete(ctx, message, 10);
   }
 });
 // settings -> submenus for each filter option
@@ -143,7 +143,7 @@ menu.simpleButton('🔍 Search now', 'search-now', {
     const isPremium = ctx.session.premium === 1;
 
     if (!isPremium && ctx.session.searchCount >= max_daily_searches) {
-      replyWithAutoDelete(ctx, `You have reached the daily limit of ${max_daily_searches} searches. Please try again tomorrow or unlock Premium features.`, 2);
+      replyWithAutoDelete(ctx, `You have reached the daily limit of ${max_daily_searches} searches. Please try again tomorrow or unlock Premium features.`, 10);
     } else {
       if (!isPremium) {
         ctx.session.searchCount++;
@@ -151,7 +151,7 @@ menu.simpleButton('🔍 Search now', 'search-now', {
 
       const servers = findServersForUser(ctx.update.callback_query.from.id, local_filename, session_filename);
       if (servers.length === 0) {
-        replyWithAutoDelete(ctx, 'There are no active servers that match your criteria.', 2);
+        replyWithAutoDelete(ctx, 'There are no active servers that match your criteria.', 10);
       } else {
         let messages = [];
         let max_slice = (isPremium? abs_max_results:max_results);
@@ -161,7 +161,7 @@ menu.simpleButton('🔍 Search now', 'search-now', {
         if (!isPremium) {
           messages.push(`You can do *${max_daily_searches - ctx.session.searchCount} more searches* today.`);
         }
-        replyWithAutoDelete(ctx, messages.join('\n'), 5);
+        replyWithAutoDelete(ctx, messages.join('\n'), 60);
       }
     }
   },
@@ -188,7 +188,7 @@ menu.simpleButton('ℹ️ Help', 'help', {
     message += ' - Premium features available.\n';
     message += ' - If you need help you can contact [@Soukron](https://t.me/soukron).';
 
-    replyWithAutoDelete(ctx, message, 2);
+    replyWithAutoDelete(ctx, message, 10);
   }
 });
 menu.simpleButton(ctx => ctx.session.premium && ctx.session.premium === 1? '🏅 Premium features enabled':'🏅  Enable premium features', 'premium', {
@@ -207,10 +207,10 @@ menu.simpleButton(ctx => ctx.session.premium && ctx.session.premium === 1? '🏅
     premiumMessage += 'Thank you!'
 
     if (ctx.session.premium === 1) {
-      replyWithAutoDelete(ctx, premiumMessage, 3);
+      replyWithAutoDelete(ctx, premiumMessage, 10);
     }
     else {
-      replyWithAutoDelete(ctx, nonPremiumMessage, 3);
+      replyWithAutoDelete(ctx, nonPremiumMessage, 10);
     }  
   }
 });
