@@ -11,7 +11,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       headers          = {
        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36'
       },
-      live_data_remote = 'https://www.hetzner.com/_resources/app/jsondata/live_data_sb.json',
+      live_data_remote = 'https://www.hetzner.com/_resources/app/data/app/live_data_sb_EUR.json',
       local_filename   = 'data/live_data.json',
       reply_format     = {
         parse_mode: 'Markdown',
@@ -21,6 +21,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       telegram_key     = process.env.TELEGRAM_KEY,
       timeout          = process.env.TIMEOUT || 60,
       session_filename = 'data/session.json',
+      notification_filename = 'data/notification_counters.json',
       premium_delay    = process.env.PREMIUM_DELAY || 30,
       max_daily_notifications = process.env.MAX_DAILY_NOTIFICATIONS || 5;
 
@@ -28,8 +29,9 @@ const loglevel         = process.env.LOGLEVEL || 'info',
 let localServers   = {},
     remoteServers  = {},
     newServers     = {},
-    sessions       = [];
-
+    sessions       = [],
+    notificationCounters = {};
+    
 // initialize some components (bot, logger, etc.)
 const bot = new telegraf(telegram_key);
 const logger = winston.createLogger({
@@ -67,19 +69,24 @@ const composeMessage = (server) => {
   return message;
 }
 
-// function to save sessions to file
+// function to save JSON to file
 const saveJSONToFile = (filename, jsonObject) => {
-  logger.info("Saving json");
   fs.writeFileSync(filename, JSON.stringify(jsonObject, null, 2));
 }
 
 // function to reset notification counters if the date has changed
-const resetNotificationCounterIfNeeded = (session) => {
+const resetNotificationCounterIfNeeded = (userId) => {
   const currentDate = new Date().toISOString().split('T')[0];
-  if (!session.data.notificationsDate || (session.data.notificationsDate && session.data.notificationsDate !== currentDate)) {
-    session.data.notificationsDate = currentDate;
-    session.data.notificationsCount = 0;
+  if (!notificationCounters[userId]) {
+    notificationCounters[userId] = {
+      daily_notifications: 0,
+      last_reset: currentDate
+    };
+  } else if (notificationCounters[userId].last_reset !== currentDate) {
+    notificationCounters[userId].last_reset = currentDate;
+    notificationCounters[userId].daily_notifications = 0;
   }
+  saveJSONToFile(notification_filename, notificationCounters);
 }
 
 // main loop every ${timeout} seconds
@@ -123,31 +130,49 @@ setInterval(async function() {
           logger.error(`Error reading ${session_filename}. Skipping individual notifications.`);
         }
 
+        // read notification counters
+        try {
+          notificationCounters = JSON.parse(fs.readFileSync(notification_filename));
+        } catch (error) {
+          notificationCounters = {};
+        }
+
         // helper function to send notifications to users
-        const sendNotifications = async (users, server, server_text, sessions) => {
+        const sendNotifications = async (users, server, server_text) => {
           for (const session of users) {
             try {
-              if (session.data.notifications == false) {
+              if (session.data.notifications === false) {
                 logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
                 continue;
               }
 
               logger.debug(`Checking filter settings for user ${session.id} (${session.data.username})`);
               let filters = session.data.filters;
+              if (!filters) {
+                filters = {
+                  maxprice: ['Max. Price', 'Any'],
+                  minhd: ['Min. HD', 'Any'],
+                  minram: ['Min. RAM', 'Any'],
+                  cputype: ['CPU Type', 'Any']
+                };
+              }
+
+              // Filters contains the default values, we can access them directly
+              const { maxprice, minhd, minram, cputype } = filters;
               if (
-                (filters.maxprice[1] === "Any" || server.price*1 <= filters.maxprice[1]*1) &&
-                (filters.minhd[1] === "Any" || server.hdd_count*1 >= filters.minhd[1]*1) &&
-                (filters.minram[1] === "Any" || server.ram_size*1 >= filters.minram[1]*1) &&
-                (filters.cputype[1] === "Any" || server.cpu.indexOf(filters.cputype[1]) > -1)
+                (maxprice[1] === "Any" || server.price * 1 <= maxprice[1] * 1) &&
+                (minhd[1] === "Any" || server.hdd_count * 1 >= minhd[1] * 1) &&
+                (minram[1] === "Any" || server.ram_size * 1 >= minram[1] * 1) &&
+                (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1)
               ) {
-                resetNotificationCounterIfNeeded(session);
-                if (session.data.premium === 0 && session.data.notificationsCount >= max_daily_notifications) {
+                resetNotificationCounterIfNeeded(session.id);
+                if (session.data.premium === 0 && notificationCounters[session.id].daily_notifications >= max_daily_notifications) {
                   logger.info(`User ${session.id} (${session.data.username}) has reached the daily notification limit.`);
                   continue;
                 }
                 else if (session.data.premium === 0) {
-                  session.data.notificationsCount += 1;
-                  saveJSONToFile(session_filename, { sessions });
+                  notificationCounters[session.id].daily_notifications += 1;
+                  saveJSONToFile(notification_filename, notificationCounters);
                 }
 
                 logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
@@ -176,14 +201,14 @@ setInterval(async function() {
 
           // send notifications to premium users
           logger.info(`Notifying ${premiumUsers.length} premium users.`);
-          await sendNotifications(premiumUsers, server, server_text, sessions);
+          await sendNotifications(premiumUsers, server, server_text);
 
           // delay for 30 minutes before notifying regular users
           await new Promise(resolve => setTimeout(resolve, premium_delay * 60 * 1000));
 
           // send notifications to regular users
           logger.info(`Notifying ${regularUsers.length} regular users.`);
-          await sendNotifications(regularUsers, server, server_text, sessions);
+          await sendNotifications(regularUsers, server, server_text);
         }
       } else {
         logger.debug('New data received but no new servers found');
@@ -191,10 +216,10 @@ setInterval(async function() {
     } else {
       logger.debug('No new data in remote server list');
     }
-  } 
+  }
   catch (error) {
     if (error.isAxiosError) {
-      logger.error('Axios error occurred: ');
+      logger.error('Axios Error occurred: ');
       logger.error(`- Message: ${error.message}`);
       logger.error(`- Status: ${error.response ? error.response.status : 'N/A'}`);
       logger.error(`- Status Text: ${error.response ? error.response.statusText : 'N/A'}`);
