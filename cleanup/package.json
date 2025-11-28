@@ -1,0 +1,15 @@
+{
+  "name": "hetznerauctionbot-cleanup",
+  "version": "1.0.0",
+  "description": "Script para limpiar el archivo de sesiones basándose en errores 403 en los logs del notifier",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Sergio G. <soukron@gmbros.net>",
+  "license": "GPLv3",
+  "dependencies": {
+    "winston": "^3.2.1"
+  }
+}
+
