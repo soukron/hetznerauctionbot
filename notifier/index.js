@@ -22,6 +22,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       timeout          = process.env.TIMEOUT || 60,
       session_filename = 'data/session.json',
       notification_filename = 'data/notification_counters.json',
+      pending_notifications_filename = 'data/pending_notifications.json',
       premium_delay    = process.env.PREMIUM_DELAY || 30,
       max_daily_notifications = process.env.MAX_DAILY_NOTIFICATIONS || 5;
 
@@ -89,11 +90,148 @@ const resetNotificationCounterIfNeeded = (userId) => {
   saveJSONToFile(notification_filename, notificationCounters);
 }
 
+// function to read pending notifications file
+const readPendingNotifications = () => {
+  try {
+    const data = fs.readFileSync(pending_notifications_filename);
+    return JSON.parse(data);
+  } catch (error) {
+    return { pending: [] };
+  }
+}
+
+// function to save pending notifications file
+const savePendingNotifications = (pendingData) => {
+  saveJSONToFile(pending_notifications_filename, pendingData);
+}
+
+// helper function to send notifications to users
+const sendNotifications = async (users, server, server_text) => {
+  for (const session of users) {
+    try {
+      if (session.data.notifications === false) {
+        logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
+        continue;
+      }
+
+      logger.debug(`Checking filter settings for user ${session.id} (${session.data.username})`);
+      let filters = session.data.filters;
+      if (!filters) {
+        filters = {
+          maxprice: ['Max. Price', 'Any'],
+          minhd: ['Min. HD', 'Any'],
+          minram: ['Min. RAM', 'Any'],
+          cputype: ['CPU Type', 'Any']
+        };
+      }
+
+      // Filters contains the default values, we can access them directly
+      const { maxprice, minhd, minram, cputype } = filters;
+      if (
+        (maxprice[1] === "Any" || server.price * 1 <= maxprice[1] * 1) &&
+        (minhd[1] === "Any" || server.hdd_count * 1 >= minhd[1] * 1) &&
+        (minram[1] === "Any" || server.ram_size * 1 >= minram[1] * 1) &&
+        (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1)
+      ) {
+        resetNotificationCounterIfNeeded(session.id);
+        if (session.data.premium === 0 && notificationCounters[session.id].daily_notifications >= max_daily_notifications) {
+          logger.info(`User ${session.id} (${session.data.username}) has reached the daily notification limit.`);
+          continue;
+        }
+        else if (session.data.premium === 0) {
+          notificationCounters[session.id].daily_notifications += 1;
+          saveJSONToFile(notification_filename, notificationCounters);
+        }
+
+        logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
+        await bot.telegram.sendMessage(session.id, server_text, reply_format);
+      }
+    } catch (sessionError) {
+      logger.error(`Error occurred for user ${session.id}: ${sessionError.code ? sessionError.code : 'N/A'}`);
+      logger.error(`- Message: ${sessionError.message}`);
+      logger.error(`- On: ${JSON.stringify(sessionError.on)}`);
+    }
+  }
+}
+
+// function to process pending notifications that are due
+const processPendingNotifications = async () => {
+  // Only runs at minute 00 or 30.
+  const nowCheck = new Date();
+  const minutes = nowCheck.getMinutes();
+  if (![0, 30].includes(minutes)) {
+    logger.debug(`Not processing pending notifications because it's not the 00 or 30 minutes.`);
+    return;
+  }
+
+  // Exit if there are no pending notifications
+  const pendingData = readPendingNotifications();
+  if (!pendingData.pending || pendingData.pending.length === 0) {
+    logger.debug(`No pending notifications to process.`);
+    return;
+  }
+
+  const now = Date.now();
+  const notificationsToSend = [];
+  const remainingNotifications = [];
+
+  // Separate notifications that are due from those that are still pending
+  for (const notification of pendingData.pending) {
+    if (now >= notification.notify_at) {
+      notificationsToSend.push(notification);
+    } else {
+      remainingNotifications.push(notification);
+    }
+  }
+
+  if (notificationsToSend.length === 0) {
+    logger.debug(`No notifications to send.`);
+    return;
+  }
+
+  logger.info(`Processing ${notificationsToSend.length} pending notification(s) for regular users.`);
+
+  // Re-read sessions and notification counters
+  try {
+    sessions = JSON.parse(fs.readFileSync(session_filename))['sessions'];
+  } catch(error) {
+    logger.error(`Error reading ${session_filename} for pending notifications.`);
+    return;
+  }
+
+  try {
+    notificationCounters = JSON.parse(fs.readFileSync(notification_filename));
+  } catch (error) {
+    notificationCounters = {};
+  }
+
+  // Get current regular users
+  let regularUsers = sessions.filter(session => session.data.premium !== 1);
+
+  // Send all due notifications
+  for (const notification of notificationsToSend) {
+    try {
+      logger.info(`Notifying ${regularUsers.length} regular users for server ${notification.server.key} (delayed notification).`);
+      await sendNotifications(regularUsers, notification.server, notification.server_text);
+    } catch (error) {
+      logger.error(`Error processing pending notification for server ${notification.server.key}: ${error.message}`);
+    }
+  }
+
+  // Save remaining notifications
+  savePendingNotifications({ pending: remainingNotifications });
+  logger.info(`Sent ${notificationsToSend.length} pending notification(s), ${remainingNotifications.length} still pending.`);
+}
+
 // main loop every ${timeout} seconds
 logger.info('Hetzner Auction Servers notifier started.');
 
-setInterval(async function() {
+// Use recursive setTimeout instead of setInterval to ensure async operations complete before next iteration
+const checkForServers = async function() {
   try {
+    // First, process any pending notifications that are due
+    await processPendingNotifications();
+
     logger.info('Checking for new servers');
 
     // get remote list
@@ -137,55 +275,6 @@ setInterval(async function() {
           notificationCounters = {};
         }
 
-        // helper function to send notifications to users
-        const sendNotifications = async (users, server, server_text) => {
-          for (const session of users) {
-            try {
-              if (session.data.notifications === false) {
-                logger.debug(`Skipping filter settings for user ${session.id} (${session.data.username})`);
-                continue;
-              }
-
-              logger.debug(`Checking filter settings for user ${session.id} (${session.data.username})`);
-              let filters = session.data.filters;
-              if (!filters) {
-                filters = {
-                  maxprice: ['Max. Price', 'Any'],
-                  minhd: ['Min. HD', 'Any'],
-                  minram: ['Min. RAM', 'Any'],
-                  cputype: ['CPU Type', 'Any']
-                };
-              }
-
-              // Filters contains the default values, we can access them directly
-              const { maxprice, minhd, minram, cputype } = filters;
-              if (
-                (maxprice[1] === "Any" || server.price * 1 <= maxprice[1] * 1) &&
-                (minhd[1] === "Any" || server.hdd_count * 1 >= minhd[1] * 1) &&
-                (minram[1] === "Any" || server.ram_size * 1 >= minram[1] * 1) &&
-                (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1)
-              ) {
-                resetNotificationCounterIfNeeded(session.id);
-                if (session.data.premium === 0 && notificationCounters[session.id].daily_notifications >= max_daily_notifications) {
-                  logger.info(`User ${session.id} (${session.data.username}) has reached the daily notification limit.`);
-                  continue;
-                }
-                else if (session.data.premium === 0) {
-                  notificationCounters[session.id].daily_notifications += 1;
-                  saveJSONToFile(notification_filename, notificationCounters);
-                }
-
-                logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
-                await bot.telegram.sendMessage(session.id, server_text, reply_format);
-              }
-            } catch (sessionError) {
-              logger.error(`Error occurred for user ${session.id}: ${sessionError.code ? sessionError.code : 'N/A'}`);
-              logger.error(`- Message: ${sessionError.message}`);
-              logger.error(`- On: ${JSON.stringify(sessionError.on)}`);
-            }
-          }
-        }
-
         // loop on every new server
         for (const server of newServers) {
           let server_text = composeMessage(server);
@@ -195,20 +284,42 @@ setInterval(async function() {
           let message = 'Via @HetznerAuctionServersBot:\n' + server_text + 'You can also talk privately with [the bot](https://t.me/HetznerAuctionServersBot) to create your own filters and/or unlock premium features.\n';
           await bot.telegram.sendMessage(telegram_chatid, message, reply_format);
 
-          // find premium users
+          // find premium and regular users
           let premiumUsers = sessions.filter(session => session.data.premium === 1);
           let regularUsers = sessions.filter(session => session.data.premium !== 1);
 
-          // send notifications to premium users
-          logger.info(`Notifying ${premiumUsers.length} premium users.`);
-          await sendNotifications(premiumUsers, server, server_text);
+          // send notifications to premium users immediately
+          logger.info(`Notifying ${premiumUsers.length} premium users immediately.`);
+          await sendNotifications(premiumUsers, server, server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.');
 
-          // delay for 30 minutes before notifying regular users
-          await new Promise(resolve => setTimeout(resolve, premium_delay * 60 * 1000));
-
-          // send notifications to regular users
-          logger.info(`Notifying ${regularUsers.length} regular users.`);
-          await sendNotifications(regularUsers, server, server_text);
+          // Enqueue regular user notifications for later (30 minutes delay)
+          const pendingData = readPendingNotifications();
+          const notifyAt = Date.now() + (premium_delay * 60 * 1000);
+          
+          // Check if notification for this server is already pending (prevent duplicates)
+          const serverKey = server.key;
+          const alreadyPending = (pendingData.pending || []).some(n => {
+            const nKey = n.server_key || (n.server && n.server.key);
+            return nKey === serverKey;
+          });
+          
+          if (!alreadyPending) {
+            logger.info(`Enqueuing notification for ${regularUsers.length} regular users (server ${server.key}). Will be sent in ${premium_delay} minutes.`);
+            
+            if (!pendingData.pending) {
+              pendingData.pending = [];
+            }
+            pendingData.pending.push({
+              server_key: server.key,
+              server: server,
+              server_text: server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.',
+              notify_at: notifyAt
+            });
+            
+            savePendingNotifications(pendingData);
+          } else {
+            logger.debug(`Regular user notification already enqueued for server ${server.key}, skipping duplicate`);
+          }
         }
       } else {
         logger.debug('New data received but no new servers found');
@@ -240,4 +351,10 @@ setInterval(async function() {
       });
     }
   }
-}, timeout * 1000);
+  
+  // Schedule next execution after current one completes
+  setTimeout(checkForServers, timeout * 1000);
+};
+
+// Start the first execution
+checkForServers();
