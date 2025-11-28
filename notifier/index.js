@@ -23,8 +23,7 @@ const loglevel         = process.env.LOGLEVEL || 'info',
       session_filename = 'data/session.json',
       notification_filename = 'data/notification_counters.json',
       pending_notifications_filename = 'data/pending_notifications.json',
-      premium_delay    = process.env.PREMIUM_DELAY || 30,
-      max_daily_notifications = process.env.MAX_DAILY_NOTIFICATIONS || 5;
+      premium_delay    = process.env.PREMIUM_DELAY || 30;
 
 // other variables
 let localServers   = {},
@@ -76,21 +75,6 @@ const saveJSONToFile = (filename, jsonObject) => {
   fs.writeFileSync(filename, JSON.stringify(jsonObject, null, 2));
 }
 
-// function to reset notification counters if the date has changed
-const resetNotificationCounterIfNeeded = (userId) => {
-  const currentDate = new Date().toISOString().split('T')[0];
-  if (!notificationCounters[userId]) {
-    notificationCounters[userId] = {
-      daily_notifications: 0,
-      last_reset: currentDate
-    };
-  } else if (notificationCounters[userId].last_reset !== currentDate) {
-    notificationCounters[userId].last_reset = currentDate;
-    notificationCounters[userId].daily_notifications = 0;
-  }
-  saveJSONToFile(notification_filename, notificationCounters);
-}
-
 // function to read pending notifications file
 const readPendingNotifications = () => {
   try {
@@ -137,16 +121,6 @@ const sendNotifications = async (users, server) => {
         (minram[1] === "Any" || server.ram_size * 1 >= minram[1] * 1) &&
         (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1)
       ) {
-        resetNotificationCounterIfNeeded(session.id);
-        if (session.data.premium === 0 && notificationCounters[session.id].daily_notifications >= max_daily_notifications) {
-          logger.info(`User ${session.id} (${session.data.username}) has reached the daily notification limit.`);
-          continue;
-        }
-        else if (session.data.premium === 0) {
-          notificationCounters[session.id].daily_notifications += 1;
-          saveJSONToFile(notification_filename, notificationCounters);
-        }
-
         logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
         await bot.telegram.sendMessage(session.id, server_text, reply_format);
       }
