@@ -275,6 +275,12 @@ const checkForServers = async function() {
           notificationCounters = {};
         }
 
+        // Calculate a single notify_at time for all notifications in this batch
+        const notifyAt = Date.now() + (premium_delay * 60 * 1000);
+        
+        // Array to collect pending notifications for this batch
+        const pendingNotificationsToAdd = [];
+
         // loop on every new server
         for (const server of newServers) {
           let server_text = composeMessage(server);
@@ -292,33 +298,44 @@ const checkForServers = async function() {
           logger.info(`Notifying ${premiumUsers.length} premium users immediately.`);
           await sendNotifications(premiumUsers, server, server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.');
 
-          // Enqueue regular user notifications for later (30 minutes delay)
-          const pendingData = readPendingNotifications();
-          const notifyAt = Date.now() + (premium_delay * 60 * 1000);
-          
-          // Check if notification for this server is already pending (prevent duplicates)
-          const serverKey = server.key;
-          const alreadyPending = (pendingData.pending || []).some(n => {
-            const nKey = n.server_key || (n.server && n.server.key);
-            return nKey === serverKey;
+          // Add notification to pending array for regular users
+          logger.info(`Enqueuing notification for ${regularUsers.length} regular users (server ${server.key}). Will be sent in ${premium_delay} minutes.`);
+          pendingNotificationsToAdd.push({
+            server_key: server.key,
+            server: server,
+            server_text: server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.',
+            notify_at: notifyAt
           });
+        }
+
+        // After processing all new servers, add all pending notifications to the file at once
+        if (pendingNotificationsToAdd.length > 0) {
+          const pendingData = readPendingNotifications();
           
-          if (!alreadyPending) {
-            logger.info(`Enqueuing notification for ${regularUsers.length} regular users (server ${server.key}). Will be sent in ${premium_delay} minutes.`);
-            
-            if (!pendingData.pending) {
-              pendingData.pending = [];
+          if (!pendingData.pending) {
+            pendingData.pending = [];
+          }
+          
+          // Check for duplicates and add only new notifications
+          const existingServerKeys = new Set((pendingData.pending || []).map(n => {
+            return n.server_key || (n.server && n.server.key);
+          }));
+          
+          let addedCount = 0;
+          for (const notification of pendingNotificationsToAdd) {
+            const serverKey = notification.server_key || (notification.server && notification.server.key);
+            if (!existingServerKeys.has(serverKey)) {
+              pendingData.pending.push(notification);
+              existingServerKeys.add(serverKey);
+              addedCount++;
+            } else {
+              logger.debug(`Regular user notification already enqueued for server ${serverKey}, skipping duplicate`);
             }
-            pendingData.pending.push({
-              server_key: server.key,
-              server: server,
-              server_text: server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.',
-              notify_at: notifyAt
-            });
-            
+          }
+          
+          if (addedCount > 0) {
             savePendingNotifications(pendingData);
-          } else {
-            logger.debug(`Regular user notification already enqueued for server ${server.key}, skipping duplicate`);
+            logger.info(`Added ${addedCount} pending notification(s) to queue. All will be sent at ${new Date(notifyAt).toISOString()}.`);
           }
         }
       } else {
