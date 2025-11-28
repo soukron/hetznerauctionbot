@@ -66,6 +66,7 @@ const composeMessage = (server) => {
   });
   message += `⏲️ *Expires in:* ${timeRemaining}\n\n`;
   message += 'Open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n';
+  message += '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.';
 
   return message;
 }
@@ -106,7 +107,10 @@ const savePendingNotifications = (pendingData) => {
 }
 
 // helper function to send notifications to users
-const sendNotifications = async (users, server, server_text) => {
+const sendNotifications = async (users, server) => {
+  // Generate the message text from server data
+  let server_text = composeMessage(server);
+
   for (const session of users) {
     try {
       if (session.data.notifications === false) {
@@ -156,13 +160,13 @@ const sendNotifications = async (users, server, server_text) => {
 
 // function to process pending notifications that are due
 const processPendingNotifications = async () => {
-  // Only runs at minute 00 or 30.
-  const nowCheck = new Date();
-  const minutes = nowCheck.getMinutes();
-  if (![0, 30].includes(minutes)) {
-    logger.debug(`Not processing pending notifications because it's not the 00 or 30 minutes.`);
-    return;
-  }
+  // // Only runs at minute 00 or 30.
+  // const nowCheck = new Date();
+  // const minutes = nowCheck.getMinutes();
+  // if (![0, 30].includes(minutes)) {
+  //   logger.debug(`Not processing pending notifications because it's not the 00 or 30 minutes.`);
+  //   return;
+  // }
 
   // Exit if there are no pending notifications
   const pendingData = readPendingNotifications();
@@ -189,6 +193,9 @@ const processPendingNotifications = async () => {
     return;
   }
 
+  // Save file containing only the remaining notifications
+  savePendingNotifications({ pending: remainingNotifications });
+
   logger.info(`Processing ${notificationsToSend.length} pending notification(s) for regular users.`);
 
   // Re-read sessions and notification counters
@@ -212,14 +219,12 @@ const processPendingNotifications = async () => {
   for (const notification of notificationsToSend) {
     try {
       logger.info(`Notifying ${regularUsers.length} regular users for server ${notification.server.key} (delayed notification).`);
-      await sendNotifications(regularUsers, notification.server, notification.server_text);
+      await sendNotifications(regularUsers, notification.server);
     } catch (error) {
       logger.error(`Error processing pending notification for server ${notification.server.key}: ${error.message}`);
     }
   }
 
-  // Save remaining notifications
-  savePendingNotifications({ pending: remainingNotifications });
   logger.info(`Sent ${notificationsToSend.length} pending notification(s), ${remainingNotifications.length} still pending.`);
 }
 
@@ -283,6 +288,7 @@ const checkForServers = async function() {
 
         // loop on every new server
         for (const server of newServers) {
+          // Generate message text for Telegram channel
           let server_text = composeMessage(server);
 
           // send them individually to Telegram channel
@@ -296,14 +302,13 @@ const checkForServers = async function() {
 
           // send notifications to premium users immediately
           logger.info(`Notifying ${premiumUsers.length} premium users immediately.`);
-          await sendNotifications(premiumUsers, server, server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.');
+          await sendNotifications(premiumUsers, server);
 
-          // Add notification to pending array for regular users
+          // Add notification to pending array for regular users (only store server data, text will be generated later)
           logger.info(`Enqueuing notification for ${regularUsers.length} regular users (server ${server.key}). Will be sent in ${premium_delay} minutes.`);
           pendingNotificationsToAdd.push({
             server_key: server.key,
             server: server,
-            server_text: server_text + '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.',
             notify_at: notifyAt
           });
         }
