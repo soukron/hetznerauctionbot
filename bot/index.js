@@ -50,6 +50,58 @@ const replyWithAutoDelete = (ctx, message, timeout = reply_timeout) => {
   });
 }
 
+// function to generate help message
+const getHelpMessage = (isPremium) => {
+  let message = '🤖 *Hetzner Auction Servers Bot*\n\n';
+  message += 'This bot helps you find and get notified about servers from the [Hetzner Server Auction](https://www.hetzner.com/sb?country=ot) that match your specific criteria.\n\n';
+  
+  message += '*📋 HOW IT WORKS*\n';
+  message += '1. Configure your search filters (Max Price, Min HD, Min RAM, CPU Type)\n';
+  message += '2. Enable notifications to receive alerts when new servers match your criteria\n';
+  message += '3. Use "Search now" to manually search for available servers\n';
+  message += '4. Messages auto-delete after a few seconds to keep your chat clean\n\n';
+  
+  message += '*🆓 FREE PLAN*\n';
+  message += '• *Notifications:* Up to 4 grouped messages per day\n';
+  message += '  - Sent at fixed times: 00:00, 06:00, 12:00, 18:00 UTC\n';
+  message += '  - Maximum 5 servers per message (sorted by price, lowest first)\n';
+  message += '  - Servers are grouped together in a single message\n';
+  message += '• *Searches:* Up to 5 manual searches per day\n';
+  message += '• *Results:* Maximum 3 servers per search\n\n';
+  
+  message += '*🏅 PREMIUM PLAN*\n';
+  message += '• *Notifications:* Unlimited, immediate, and individual\n';
+  message += '  - Receive notifications as soon as matching servers are detected\n';
+  message += '  - Each server sent in a separate message\n';
+  message += '  - No daily limits\n';
+  message += '• *Searches:* Unlimited manual searches per day\n';
+  message += '• *Results:* Up to 10 servers per search\n\n';
+  
+  message += '*⚙️ CONFIGURATION OPTIONS*\n';
+  message += 'Use the "🔧 Filters" menu to configure:\n';
+  message += '• *Max. Price:* Maximum monthly price (excl. VAT) in €\n';
+  message += '• *Min. HD:* Minimum number of hard drives\n';
+  message += '• *Min. RAM:* Minimum RAM size in GB\n';
+  message += '• *CPU Type:* Intel, AMD, or Any\n\n';
+  
+  message += '*📱 COMMANDS*\n';
+  message += '• `/start` - Show the main menu\n';
+  message += '• `/help` - Show this help message\n\n';
+  
+  message += '*💡 TIPS*\n';
+  message += '• Set specific filters to receive only relevant notifications\n';
+  message += '• Premium users get instant notifications, perfect for rare configurations\n\n';
+  
+  if (!isPremium) {
+    message += '*💎 Want Premium?*\n';
+    message += 'Tap the "🏅 Enable premium features" button in the menu to learn more!\n\n';
+  }
+  
+  message += 'Need help? Contact [@Soukron](https://t.me/soukron)';
+  
+  return message;
+}
+
 // search filters to create submenus programatically
 const filters = [
   {
@@ -177,18 +229,9 @@ menu.toggle(ctx => ctx.session.notifications? 'Disable notifications': 'Enable n
 });
 menu.simpleButton('ℹ️ Help', 'help', {
   doFunc: ctx => {
-    let message = 'This is a helper bot for [Hetzner Auction Servers channel]';
-    message += '(https://t.me/hetznerauctionservers).\n\n*INSTRUCTIONS*:\n';
-    message += ' - Use /start to show the main menu at any moment.\n';
-    message += ' - Use the Settings menu to set your search preferences and you ';
-    message += 'will get notified for new servers matching your criteria.\n';
-    message += ' - Messages from the bot may be deleted automatically after ';
-    message += 'some time in order to keep the chat history clean.\n';
-    message += ' - Disable the notifications at your convenience.\n';
-    message += ' - Premium features available.\n';
-    message += ' - If you need help you can contact [@Soukron](https://t.me/soukron).';
-
-    replyWithAutoDelete(ctx, message, 10);
+    const isPremium = ctx.session.premium === 1;
+    const message = getHelpMessage(isPremium);
+    replyWithAutoDelete(ctx, message, 30);
   }
 });
 menu.simpleButton(ctx => ctx.session.premium && ctx.session.premium === 1? '🏅 Premium features enabled':'🏅  Enable premium features', 'premium', {
@@ -218,10 +261,92 @@ menu.simpleButton(ctx => ctx.session.premium && ctx.session.premium === 1? '🏅
 // set bot options (session, menu, callbacks and catch errors)
 bot.use((new TelegrafSession({ database: session_filename })).middleware());
 
+// /start command handler - delete user's message before showing menu
+// This must be registered BEFORE menu.init() so it executes first
+bot.command('start', async (ctx, next) => {
+  // Delete the user's command message
+  if (ctx.message) {
+    ctx.deleteMessage(ctx.message.message_id).catch(err => {
+      // Ignore errors if message is too old or already deleted
+      logger.debug(`Could not delete start command message: ${err.message}`);
+    });
+  }
+  
+  // Wrap ctx.reply and ctx.telegram.sendMessage to intercept the menu message
+  const originalReply = ctx.reply.bind(ctx);
+  const originalSendMessage = ctx.telegram.sendMessage.bind(ctx.telegram);
+  
+  const scheduleMenuDeletion = (sentMessage) => {
+    if (sentMessage && sentMessage.message_id) {
+      const messageId = sentMessage.message_id;
+      const chatId = ctx.chat.id;
+      
+      // Schedule deletion after 5 minutes (300 seconds)
+      setTimeout(() => {
+        ctx.telegram.deleteMessage(chatId, messageId).catch(err => {
+          // Ignore errors if message is too old or already deleted
+          logger.debug(`Could not delete menu message: ${err.message}`);
+        });
+      }, 5 * 60 * 1000); // 5 minutes
+    }
+  };
+  
+  ctx.reply = function(...args) {
+    const result = originalReply(...args);
+    
+    // Check if this is the main menu message
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('Choose an option:')) {
+      result.then(scheduleMenuDeletion).catch(err => {
+        logger.debug(`Error handling menu message: ${err.message}`);
+      });
+    }
+    
+    return result;
+  };
+  
+  ctx.telegram.sendMessage = function(...args) {
+    const result = originalSendMessage(...args);
+    
+    // Check if this is the main menu message (text is in args[1] for sendMessage)
+    if (args[1] && typeof args[1] === 'string' && args[1].includes('Choose an option:')) {
+      result.then(scheduleMenuDeletion).catch(err => {
+        logger.debug(`Error handling menu message: ${err.message}`);
+      });
+    }
+    
+    return result;
+  };
+  
+  // Continue with menu processing
+  await next();
+  
+  // Keep wrapper active for a short time after menu processing
+  // to ensure menu message is captured
+  setTimeout(() => {
+    // Restore original methods after a delay
+    ctx.reply = originalReply;
+    ctx.telegram.sendMessage = originalSendMessage;
+  }, 2000); // 2 seconds should be enough for menu to be sent
+});
+
 bot.use(menu.init({
   backButtonText: '⏪ Previous menu',
   mainMenuButtonText: '⏮️ Main menu'
 }));
+
+// /help command handler
+bot.command('help', (ctx) => {
+  // Delete the user's command message
+  if (ctx.message) {
+    ctx.deleteMessage(ctx.message.message_id).catch(err => {
+      // Ignore errors if message is too old or already deleted
+      logger.debug(`Could not delete help command message: ${err.message}`);
+    });
+  }
+  const isPremium = ctx.session.premium === 1;
+  const message = getHelpMessage(isPremium);
+  replyWithAutoDelete(ctx, message, 60);
+});
 
 bot.use((ctx, next) => {
   if (ctx.callbackQuery) {
