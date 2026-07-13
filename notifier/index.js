@@ -35,7 +35,7 @@ let localServers   = {},
     instructions_text_single = '\nOpen the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n',
     instructions_text_grouped = '\nFor each server, open the [server auction page](https://www.hetzner.com/sb?country=ot) and type the *ID* in the search box to find the details.\n',
     footer_text = '\nDisable notifications and/or change the filters in your settings (use /start command) to stop receiving notifications.'
-    
+
 // initialize some components (bot, logger, etc.)
 const bot = new telegraf(telegram_key);
 const logger = winston.createLogger({
@@ -78,13 +78,13 @@ const composeMessage = (server, append_instructions = true, append_footer = true
 // compose a grouped message from multiple servers (max 5, ordered by price)
 const composeGroupedMessage = (servers) => {
   if (servers.length === 0) return '';
-  
+
   // Sort by price (ascending)
   const sortedServers = [...servers].sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-  
+
   // Take maximum 5
   const serversToShow = sortedServers.slice(0, 5);
-  
+
   // Compose the message
   let message = `📦 *Found ${serversToShow.length} server${serversToShow.length > 1 ? 's' : ''} matching your filters:*\n\n`;
   serversToShow.forEach((server, index) => {
@@ -93,13 +93,13 @@ const composeGroupedMessage = (servers) => {
     // Add numbering prefix
     message += `${serverMessage}`;
     if (index < serversToShow.length - 1) {
-      message += 'n---\n\n';
+      message += '\n---\n\n';
     }
   });
-  
+
   message += instructions_text_grouped;
   message += footer_text;
-  
+
   return message;
 }
 
@@ -136,28 +136,28 @@ const shouldRunBatch = (cronSchedule) => {
 const checkCronField = (pattern, value) => {
   // Exact match - compare as numbers to handle "00" vs "0"
   if (parseInt(pattern) === value) return true;
-  
+
   // Wildcard
   if (pattern === '*') return true;
-  
+
   // Step values: */N (every N)
   if (pattern.startsWith('*/')) {
     const step = parseInt(pattern.substring(2));
     return value % step === 0;
   }
-  
+
   // List: 0,6,12,18
   if (pattern.includes(',')) {
     const values = pattern.split(',').map(v => parseInt(v.trim()));
     return values.includes(value);
   }
-  
+
   // Range: 0-23
   if (pattern.includes('-')) {
     const [start, end] = pattern.split('-').map(v => parseInt(v.trim()));
     return value >= start && value <= end;
   }
-  
+
   return false;
 }
 
@@ -193,19 +193,55 @@ const sendNotifications = async (users, server) => {
       if (!filters) {
         filters = {
           maxprice: ['Max. Price', 'Any'],
-          minhd: ['Min. HD', 'Any'],
+          minhd: ['Min. Disk Count', 'Any'],
           minram: ['Min. RAM', 'Any'],
-          cputype: ['CPU Type', 'Any']
+          cputype: ['CPU Type', 'Any'],
+          disktype: ['Disk Type', 'Any'],
+          ramtype: ['RAM Type', 'Any']
         };
       }
 
       // Filters contains the default values, we can access them directly
-      const { maxprice, minhd, minram, cputype } = filters;
+      const { maxprice, minhd, minram, cputype, disktype, ramtype } = filters;
+
+      // Check disk type filter
+      let diskTypeMatches = true;
+      if (disktype && disktype[1] !== "Any") {
+        const diskTypeFilter = disktype[1];
+        const hddHrString = server.hdd_hr ? server.hdd_hr.join(' ') : '';
+        if (diskTypeFilter === 'SSD') {
+          diskTypeMatches = hddHrString.toUpperCase().indexOf('SSD') > -1;
+        } else if (diskTypeFilter === 'SATA') {
+          // SATA disks are typically marked as "SATA" or "HDD" (but not "SSD")
+          diskTypeMatches = (hddHrString.toUpperCase().indexOf('SATA') > -1 ||
+                            (hddHrString.toUpperCase().indexOf('HDD') > -1 &&
+                             hddHrString.toUpperCase().indexOf('SSD') === -1));
+        }
+      }
+
+      // Check RAM type filter
+      let ramTypeMatches = true;
+      if (ramtype && ramtype[1] !== "Any") {
+        const ramTypeFilter = ramtype[1];
+        // Check in ram array and description array
+        const ramString = server.ram ? server.ram.join(' ') : '';
+        const descriptionString = server.description ? (Array.isArray(server.description) ? server.description.join(' ') : server.description) : '';
+        const combinedString = (ramString + ' ' + descriptionString).toUpperCase();
+
+        if (ramTypeFilter === 'ECC') {
+          ramTypeMatches = combinedString.indexOf('ECC') > -1;
+        } else if (ramTypeFilter === 'No ECC') {
+          ramTypeMatches = combinedString.indexOf('ECC') === -1;
+        }
+      }
+
       if (
         (maxprice[1] === "Any" || server.price * 1 <= maxprice[1] * 1) &&
         (minhd[1] === "Any" || server.hdd_count * 1 >= minhd[1] * 1) &&
         (minram[1] === "Any" || server.ram_size * 1 >= minram[1] * 1) &&
-        (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1)
+        (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1) &&
+        diskTypeMatches &&
+        ramTypeMatches
       ) {
         logger.info(`Server ${server.key} matches filters for user ${session.id} (${session.data.username})`);
         await bot.telegram.sendMessage(session.id, server_text, reply_format);
@@ -235,18 +271,54 @@ const serverMatchesFilters = (server, filters) => {
   if (!filters) {
     filters = {
       maxprice: ['Max. Price', 'Any'],
-      minhd: ['Min. HD', 'Any'],
+      minhd: ['Min. Disk Count', 'Any'],
       minram: ['Min. RAM', 'Any'],
-      cputype: ['CPU Type', 'Any']
+      cputype: ['CPU Type', 'Any'],
+      disktype: ['Disk Type', 'Any'],
+      ramtype: ['RAM Type', 'Any']
     };
   }
 
-  const { maxprice, minhd, minram, cputype } = filters;
+  const { maxprice, minhd, minram, cputype, disktype, ramtype } = filters;
+
+  // Check disk type filter
+  let diskTypeMatches = true;
+  if (disktype && disktype[1] !== "Any") {
+    const diskTypeFilter = disktype[1];
+    const hddHrString = server.hdd_hr ? server.hdd_hr.join(' ') : '';
+    if (diskTypeFilter === 'SSD') {
+      diskTypeMatches = hddHrString.toUpperCase().indexOf('SSD') > -1;
+    } else if (diskTypeFilter === 'SATA') {
+      // SATA disks are typically marked as "SATA" or "HDD" (but not "SSD")
+      diskTypeMatches = (hddHrString.toUpperCase().indexOf('SATA') > -1 ||
+                        (hddHrString.toUpperCase().indexOf('HDD') > -1 &&
+                         hddHrString.toUpperCase().indexOf('SSD') === -1));
+    }
+  }
+
+  // Check RAM type filter
+  let ramTypeMatches = true;
+  if (ramtype && ramtype[1] !== "Any") {
+    const ramTypeFilter = ramtype[1];
+    // Check in ram array and description array
+    const ramString = server.ram ? server.ram.join(' ') : '';
+    const descriptionString = server.description ? (Array.isArray(server.description) ? server.description.join(' ') : server.description) : '';
+    const combinedString = (ramString + ' ' + descriptionString).toUpperCase();
+
+    if (ramTypeFilter === 'ECC') {
+      ramTypeMatches = combinedString.indexOf('ECC') > -1;
+    } else if (ramTypeFilter === 'No ECC') {
+      ramTypeMatches = combinedString.indexOf('ECC') === -1;
+    }
+  }
+
   return (
     (maxprice[1] === "Any" || server.price * 1 <= maxprice[1] * 1) &&
     (minhd[1] === "Any" || server.hdd_count * 1 >= minhd[1] * 1) &&
     (minram[1] === "Any" || server.ram_size * 1 >= minram[1] * 1) &&
-    (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1)
+    (cputype[1] === "Any" || server.cpu.indexOf(cputype[1]) > -1) &&
+    diskTypeMatches &&
+    ramTypeMatches
   );
 }
 
@@ -277,8 +349,8 @@ const processBatchedNotifications = async () => {
   }
 
   // Get free users (non-premium with notifications enabled)
-  let freeUsers = sessions.filter(session => 
-    session.data.premium !== 1 && 
+  let freeUsers = sessions.filter(session =>
+    session.data.premium !== 1 &&
     session.data.notifications !== false
   );
 
@@ -300,7 +372,7 @@ const processBatchedNotifications = async () => {
   for (const user of freeUsers) {
     try {
       // Filter servers that match user's criteria
-      const matchingServers = pendingServers.filter(server => 
+      const matchingServers = pendingServers.filter(server =>
         serverMatchesFilters(server, user.data.filters)
       );
 
@@ -411,16 +483,16 @@ const checkForServers = async function() {
         // After processing all new servers, add all pending servers to the file at once
         if (pendingServersToAdd.length > 0) {
           const pendingData = readPendingNotifications();
-          
+
           if (!pendingData.pending) {
             pendingData.pending = [];
           }
-          
+
           // Check for duplicates and add only new servers
           const existingServerKeys = new Set((pendingData.pending || []).map(n => {
             return n.server && n.server.key;
           }));
-          
+
           let addedCount = 0;
           for (const notification of pendingServersToAdd) {
             const serverKey = notification.server && notification.server.key;
@@ -432,7 +504,7 @@ const checkForServers = async function() {
               logger.debug(`Server ${serverKey} already in pending list, skipping duplicate`);
             }
           }
-          
+
           if (addedCount > 0) {
             savePendingNotifications(pendingData);
             logger.info(`Added ${addedCount} server(s) to pending list for batch processing.`);
@@ -471,7 +543,7 @@ const checkForServers = async function() {
       });
     }
   }
-  
+
   // Schedule next execution after current one completes
   setTimeout(checkForServers, timeout * 1000);
 };

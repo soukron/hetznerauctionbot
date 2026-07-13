@@ -80,9 +80,11 @@ const getHelpMessage = (isPremium) => {
   message += '*⚙️ CONFIGURATION OPTIONS*\n';
   message += 'Use the "🔧 Filters" menu to configure:\n';
   message += '• *Max. Price:* Maximum monthly price (excl. VAT) in €\n';
-  message += '• *Min. HD:* Minimum number of hard drives\n';
+  message += '• *Min. Disks:* Minimum number of disks (1-4)\n';
   message += '• *Min. RAM:* Minimum RAM size in GB\n';
-  message += '• *CPU Type:* Intel, AMD, or Any\n\n';
+  message += '• *RAM Type:* ECC, No ECC, or Any\n';
+  message += '• *CPU Type:* Intel, AMD, or Any\n';
+  message += '• *Disk Type:* SSD, SATA, or Any\n\n';
   
   message += '*📱 COMMANDS*\n';
   message += '• `/start` - Show the main menu\n';
@@ -112,10 +114,24 @@ const filters = [
     'joinLastRow': false
   },
   {
+    'name': 'cputype',
+    'title': 'CPU Type',
+    'values': ['Any', 'Intel', 'AMD'],
+    'menu': new TelegrafInlineMenu('Set the preferred CPU type:'),
+    'joinLastRow': false
+  },
+  {
     'name': 'minhd',
-    'title': 'Min. HD',
-    'values': ['Any', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+    'title': 'Min. Disks',
+    'values': ['Any', '1', '2', '3', '4'],
     'menu': new TelegrafInlineMenu('Set the min. number of disks:'),
+    'joinLastRow': false
+  },
+  {
+    'name': 'disktype',
+    'title': 'Disk Type',
+    'values': ['Any', 'SSD', 'SATA'],
+    'menu': new TelegrafInlineMenu('Set the preferred disk type:'),
     'joinLastRow': true
   },
   {
@@ -123,14 +139,14 @@ const filters = [
     'title': 'Min. RAM',
     'values': ['Any', '2', '4', '8', '12', '16', '24', '32', '48', '64', '96', '128', '256', '512', '768'],
     'menu': new TelegrafInlineMenu('Set the min. RAM size in GB:'),
-    'joinLastRow': true
+    'joinLastRow': false
   },
   {
-    'name': 'cputype',
-    'title': 'CPU Type',
-    'values': ['Any', 'Intel', 'AMD'],
-    'menu': new TelegrafInlineMenu('Set the preferred CPU type:'),
-    'joinLastRow': false
+    'name': 'ramtype',
+    'title': 'RAM Type',
+    'values': ['Any', 'ECC', 'No ECC'],
+    'menu': new TelegrafInlineMenu('Set the preferred RAM type:'),
+    'joinLastRow': true
   },
 ];
 
@@ -155,6 +171,17 @@ filters.forEach(item => {
   // create the filter submenu
   item.menu.select(`set-${item.name}`, item.values, {
     setFunc: (ctx, key) => {
+      // Initialize filters if not defined
+      if (typeof ctx.session.filters === 'undefined') {
+        ctx.session.notifications = true;
+        ctx.session.filters = {};
+      }
+      // Initialize missing filters (for backward compatibility)
+      filters.forEach(filter => {
+        if (!ctx.session.filters[filter.name]) {
+          ctx.session.filters[filter.name] = [filter.title, filter.values[0]];
+        }
+      });
       // set the value in the session
       logger.debug(`${ctx.update.callback_query.from.id} (${ctx.update.callback_query.from.username}) sets ${item.name} => ${key}`);
       ctx.session.username = ctx.update.callback_query.from.username;
@@ -162,18 +189,30 @@ filters.forEach(item => {
     },
     isSetFunc: (ctx, key) => {
       try {
+        // Initialize filters if not defined
+        if (typeof ctx.session.filters === 'undefined') {
+          ctx.session.notifications = true;
+          ctx.session.filters = {};
+        }
+        // Initialize missing filters (for backward compatibility)
+        filters.forEach(filter => {
+          if (!ctx.session.filters[filter.name]) {
+            ctx.session.filters[filter.name] = [filter.title, filter.values[0]];
+          }
+        });
         // return (true) if user is viewing this specific value
         return ctx.session.filters[item.name][1] === key;
       }
       catch (error) { 
-        // initialize filters in session if error
+        // Initialize filters in session if error
         if (typeof ctx.session.filters === 'undefined') {
           ctx.session.notifications = true;
           ctx.session.filters = {};
-          filters.forEach(filter => {
-            ctx.session.filters[filter.name] = [filter.title, filter.values[0]];
-          });
         }
+        // Initialize all filters
+        filters.forEach(filter => {
+          ctx.session.filters[filter.name] = [filter.title, filter.values[0]];
+        });
         // return (true) if user is viewing this specific value after initialize
         return ctx.session.filters[item.name][1] === key;
       }
@@ -236,18 +275,31 @@ menu.simpleButton('ℹ️ Help', 'help', {
 });
 menu.simpleButton(ctx => ctx.session.premium && ctx.session.premium === 1? '🏅 Premium features enabled':'🏅  Enable premium features', 'premium', {
   doFunc: ctx => {
-    let nonPremiumMessage = 'Consider supporting the developer and get in return some nice features like:\n';
-    nonPremiumMessage += ' - receiving unlimited daily notifications.\n';
-    nonPremiumMessage += ' - receiving the notifications before non-premium users.\n';
-    nonPremiumMessage += ' - performing unlimited searches per day based on your filters.\n';
-    nonPremiumMessage += ' - increased number of results in searches.\n\n';
+    let nonPremiumMessage = '💎 *Premium Plan Benefits*\n\n';
+    nonPremiumMessage += 'Consider supporting the developer and get:\n\n';
+    nonPremiumMessage += '*📬 Notifications:*\n';
+    nonPremiumMessage += '• Unlimited, immediate, and individual\n';
+    nonPremiumMessage += '• Receive notifications as soon as matching servers are detected\n';
+    nonPremiumMessage += '• Each server sent in a separate message\n';
+    nonPremiumMessage += '• No daily limits\n\n';
+    nonPremiumMessage += '*🔍 Searches:*\n';
+    nonPremiumMessage += '• Unlimited manual searches per day\n\n';
+    nonPremiumMessage += '*📊 Results:*\n';
+    nonPremiumMessage += '• Up to 10 servers per search\n\n';
+    nonPremiumMessage += 'Tap the button in the menu to enable Premium features!';
 
-    let premiumMessage = 'Thanks for supporting the developer. As a *premium member* you can:\n';
-    premiumMessage += ' - receive unlimited daily notifications.\n';
-    premiumMessage += ' - receive the notifications 30 minutes before non-premium users.\n';
-    premiumMessage += ' - perform unlimited searches per day based on your filters.\n';
-    premiumMessage += ' - increase the number of results in searches.\n\n';
-    premiumMessage += 'Thank you!'
+    let premiumMessage = '🏅 *Premium Features Active*\n\n';
+    premiumMessage += 'Thanks for supporting the developer! As a *premium member* you enjoy:\n\n';
+    premiumMessage += '*📬 Notifications:*\n';
+    premiumMessage += '• Unlimited, immediate, and individual\n';
+    premiumMessage += '• Receive notifications as soon as matching servers are detected\n';
+    premiumMessage += '• Each server sent in a separate message\n';
+    premiumMessage += '• No daily limits\n\n';
+    premiumMessage += '*🔍 Searches:*\n';
+    premiumMessage += '• Unlimited manual searches per day\n\n';
+    premiumMessage += '*📊 Results:*\n';
+    premiumMessage += '• Up to 10 servers per search\n\n';
+    premiumMessage += 'Thank you for your support! 🙏';
 
     if (ctx.session.premium === 1) {
       replyWithAutoDelete(ctx, premiumMessage, 10);
